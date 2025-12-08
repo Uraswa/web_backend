@@ -1,6 +1,8 @@
 ﻿import ProductController from './Controller/ProductController.js';
 import FeedbackController from './Controller/FeedbackController.js';
 import CartController from './Controller/CartController.js';
+import OrderController from './Controller/OrderController.js';
+
 export default (router) => {
 
 
@@ -29,4 +31,10 @@ export default (router) => {
     router.put('/cart/update/:productId', CartController.updateCartItem);
     router.delete('/cart/remove/:productId', CartController.removeFromCart);
     router.delete('/cart/clear', CartController.clearCart);
+
+// Заказы
+    router.post('/orders/create', OrderController.createOrder);
+    router.get('/orders', OrderController.getUserOrders);
+    router.get('/orders/:orderId', OrderController.getOrderDetails);
+    router.get('/orders/success/:orderId', OrderController.orderSuccess);
 }
