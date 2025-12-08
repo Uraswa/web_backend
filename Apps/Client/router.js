@@ -1,4 +1,5 @@
 ﻿import ProductController from './Controller/ProductController.js';
+import FeedbackController from './Controller/FeedbackController.js';
 import CartController from './Controller/CartController.js';
 export default (router) => {
 
@@ -14,6 +15,12 @@ export default (router) => {
 
 // Страница товара
     router.get('/products/:id', ProductController.getProductById);
+
+// Отзывы
+    router.post('/products/:productId/feedback', FeedbackController.addFeedback);
+    router.delete('/products/:productId/feedback', FeedbackController.deleteFeedback);
+    router.get('/user/feedback', FeedbackController.getUserFeedback);
+
 // Корзина
     // Корзина
     router.get('/cart', CartController.getCart);
