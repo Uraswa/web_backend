@@ -9,17 +9,10 @@ class OrderController {
             const user = req.user;
             const { opp_id } = req.body;
 
-            if (!user) {
-                return res.status(401).json({
-                    success: false,
-                    error: 'Требуется авторизация'
-                });
-            }
-
             if (!opp_id) {
                 return res.status(400).json({
                     success: false,
-                    error: 'Не указан пункт выдачи'
+                    error: 'ppo_not_defined'
                 });
             }
 
@@ -29,7 +22,7 @@ class OrderController {
             if (!cart || !cart.items || cart.items.length === 0) {
                 return res.status(400).json({
                     success: false,
-                    error: 'Корзина пуста'
+                    error: 'cart_empty'
                 });
             }
 
@@ -68,13 +61,6 @@ class OrderController {
         try {
             const user = req.user;
 
-            if (!user) {
-                return res.status(401).json({
-                    success: false,
-                    error: 'Требуется авторизация'
-                });
-            }
-
             const orders = await OrderModel.findByUserId(user.user_id);
 
             // Добавляем информацию о товарах для каждого заказа
@@ -110,19 +96,12 @@ class OrderController {
             const user = req.user;
             const { orderId } = req.params;
 
-            if (!user) {
-                return res.status(401).json({
-                    success: false,
-                    error: 'Требуется авторизация'
-                });
-            }
-
             const order = await OrderModel.findById(orderId);
 
             if (!order) {
                 return res.status(404).json({
                     success: false,
-                    error: 'Заказ не найден'
+                    error: 'order_not_found'
                 });
             }
 
@@ -130,7 +109,7 @@ class OrderController {
             if (order.receiver_id !== user.user_id) {
                 return res.status(403).json({
                     success: false,
-                    error: 'Доступ запрещен'
+                    error: 'access_denied'
                 });
             }
 
@@ -152,14 +131,15 @@ class OrderController {
     // Страница "Заказ сделан"
     async orderSuccess(req, res) {
         try {
+            const user = req.user;
             const { orderId } = req.params;
 
             const order = await OrderModel.findById(orderId);
 
-            if (!order) {
+            if (!order || order.receiver_id != user.user_id) {
                 return res.status(404).json({
                     success: false,
-                    error: 'Заказ не найден'
+                    error: 'order_not_found'
                 });
             }
 

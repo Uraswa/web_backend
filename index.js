@@ -7,6 +7,7 @@ dotenv.config();
 import express from 'express'
 import cors from "cors";
 import cookieParser from "cookie-parser";
+import tokenService from "./Core/Services/tokenService.js";
 
 const app = express()
 app.use(express.json())
@@ -17,6 +18,8 @@ app.use(cookieParser());
 //     allowedHeaders: ['Content-Type', 'Authorization']
 // }))
 
+//console.log(tokenService.generateTokens({user_id: 34395}, '999h', '9999h'))
+
 const router = express.Router()
 app.use(router);
 app.disable('etag');
@@ -25,7 +28,11 @@ app.disable('etag');
 authRoutes(router)
 clientRoutes(router)
 
-
-app.listen(8000, () => {
+let server = app.listen(8000, () => {
     console.log("started server")
 })
+
+export {
+    app,
+    server
+}

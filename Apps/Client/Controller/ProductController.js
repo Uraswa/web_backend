@@ -31,7 +31,7 @@ class ProductController {
             if (!product) {
                 return res.status(404).json({
                     success: false,
-                    error: 'Товар не найден'
+                    error: 'not_found'
                 });
             }
 
