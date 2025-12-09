@@ -1,5 +1,6 @@
 import dotenv from "dotenv"
 import authRoutes from "./Apps/Auth/router.js";
+import clientRoutes from "./Apps/Client/router.js";
 
 dotenv.config();
 
@@ -22,6 +23,7 @@ app.disable('etag');
 
 
 authRoutes(router)
+clientRoutes(router)
 
 
 app.listen(8000, () => {
