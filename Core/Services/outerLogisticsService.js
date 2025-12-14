@@ -97,6 +97,157 @@ class OuterLogisticsService {
     }
 
     /**
+     * Передача товара логисту для доставки
+     * @param {number} orderId - ID заказа
+     * @param {number} logisticsOrderIdentifier - ID логистического заказа
+     * @param {number} productId - ID товара
+     * @param {number} count - Количество товара
+     * @param {number} oppId - ID ПВЗ, откуда передается товар
+     * @returns {Promise<Object>} Результат операции
+     */
+    async giveProductToDelivery(orderId, logisticsOrderIdentifier, productId, count, oppId) {
+        const client = await Database.GetMasterClient();
+
+        try {
+            await client.query('BEGIN');
+
+            // Проверяем существование логистического заказа
+            const logisticsOrder = this._logisticsOrders[logisticsOrderIdentifier];
+            if (!logisticsOrder) {
+                throw new Error(`Логистический заказ ${logisticsOrderIdentifier} не найден`);
+            }
+
+            // Проверяем, что товар есть в логистическом заказе
+            const productInLogistics = logisticsOrder.products.find(
+                p => p.productId === productId && p.clientOrderId === orderId
+            );
+
+            if (!productInLogistics) {
+                throw new Error(
+                    `Товар ${productId} из заказа ${orderId} не найден в логистическом заказе ${logisticsOrderIdentifier}`
+                );
+            }
+
+            // Проверяем количество
+            if (count > productInLogistics.count) {
+                throw new Error(
+                    `Нельзя передать ${count} шт. В логистическом заказе только ${productInLogistics.count} шт.`
+                );
+            }
+
+            // Формируем данные для статуса
+            const statusData = {
+                logistics_order_id: logisticsOrderIdentifier,
+                from_opp_id: oppId
+            };
+
+            // Добавляем статус sent_to_logistics
+            await client.query(
+                `INSERT INTO order_product_statuses (order_id, product_id, order_product_status, count, date, data)
+                 VALUES ($1, $2, 'sent_to_logistics', $3, NOW(), $4)`,
+                [
+                    orderId,
+                    productId,
+                    count,
+                    JSON.stringify(statusData)
+                ]
+            );
+
+            await client.query('COMMIT');
+
+            return {
+                success: true,
+                data: {
+                    message: `Товар передан в логистический заказ ${logisticsOrderIdentifier}`,
+                    logistics_order_id: logisticsOrderIdentifier,
+                    product_id: productId,
+                    count: count,
+                    opp_id: oppId
+                }
+            };
+
+        } catch (error) {
+            await client.query('ROLLBACK');
+            console.error('Ошибка в giveProductToDelivery:', error);
+            return {
+                success: false,
+                error: error.message
+            };
+        } finally {
+            client.release();
+        }
+    }
+
+    /**
+     * Прием товаров из логистического заказа в целевой ПВЗ
+     * @param {number} logisticsOrderIdentifier - ID логистического заказа
+     * @returns {Promise<Object>} Результат операции
+     */
+    async addProductsToOpp(logisticsOrderIdentifier) {
+        const client = await Database.GetMasterClient();
+
+        try {
+            await client.query('BEGIN');
+
+            // Получаем логистический заказ из памяти
+            const logisticsOrder = this._logisticsOrders[logisticsOrderIdentifier];
+            if (!logisticsOrder) {
+                throw new Error(`Логистический заказ ${logisticsOrderIdentifier} не найден`);
+            }
+
+            const targetOppId = logisticsOrder.targetOppId;
+            const products = logisticsOrder.products;
+
+            if (!products || products.length === 0) {
+                throw new Error(`Логистический заказ ${logisticsOrderIdentifier} не содержит товаров`);
+            }
+
+            // Для каждого товара в логистическом заказе добавляем статус arrived_in_opp
+            for (const product of products) {
+                const statusData = {
+                    from_logistics_order_id: logisticsOrderIdentifier,
+                    is_target_opp: true,
+                    opp_id: targetOppId
+                };
+
+                await client.query(
+                    `INSERT INTO order_product_statuses (order_id, product_id, order_product_status, count, date, data)
+                     VALUES ($1, $2, 'arrived_in_opp', $3, NOW(), $4)`,
+                    [
+                        product.clientOrderId,
+                        product.productId,
+                        product.count,
+                        JSON.stringify(statusData)
+                    ]
+                );
+            }
+
+            await client.query('COMMIT');
+
+            return {
+                success: true,
+                data: {
+                    message: `Все товары из логистического заказа ${logisticsOrderIdentifier} получены в ПВЗ ${targetOppId}`,
+                    logistics_order_id: logisticsOrderIdentifier,
+                    target_opp_id: targetOppId,
+                    products_count: products.length,
+                    total_items: products.reduce((sum, p) => sum + p.count, 0)
+                }
+            };
+
+        } catch (error) {
+            await client.query('ROLLBACK');
+            console.error('Ошибка в addProductsToOpp:', error);
+            return {
+                success: false,
+                error: error.message
+            };
+        } finally {
+            client.release();
+        }
+    }
+
+    /**
      * Создать логистический заказ вручную (для отмены заказа или других операций)
      * @param {number} sourceOppId - ID ПВЗ отправления
      * @param {number} targetOppId - ID ПВЗ назначения
@@ -177,7 +328,7 @@ class OuterLogisticsService {
      * @param {Array} orders - Массив заказов (обычно обратные заказы при отмене)
      * @returns {Promise<Object>} Результат планирования с созданными логистическими заказами
      */
-    async planOrderDelivery(orders, client = null) {
+    async planOrderDelivery(orders, client = null, auto_add_to_logistics = true) {
         let shouldReleaseClient = false;
 
         try {
@@ -199,10 +350,12 @@ class OuterLogisticsService {
 
                 // Получаем все товары заказа
                 const productsResult = await Database.query(
-                    `SELECT op.product_id, op.ordered_count, op.price,
+                    `SELECT op.product_id,
+                            op.ordered_count,
+                            op.price,
                             p.name as product_name
                      FROM order_products op
-                     JOIN products p ON op.product_id = p.product_id
+                              JOIN products p ON op.product_id = p.product_id
                      WHERE op.order_id = $1`,
                     [orderId]
                 );
@@ -302,33 +455,35 @@ class OuterLogisticsService {
                 }
             }
 
-            // Добавляем статусы sent_to_logistics для каждого товара в логистических заказах
-            for (const logisticsOrder of createdLogisticsOrders) {
-                const logisticsOrderId = logisticsOrder.logistics_order_id;
-                const sourceOppId = logisticsOrder.source_opp_id;
+            if (auto_add_to_logistics) {
+                // Добавляем статусы sent_to_logistics для каждого товара в логистических заказах
+                for (const logisticsOrder of createdLogisticsOrders) {
+                    const logisticsOrderId = logisticsOrder.logistics_order_id;
+                    const sourceOppId = logisticsOrder.source_opp_id;
 
-                for (const product of logisticsOrder.products) {
-                    // Формируем данные для статуса
-                    const statusData = {
-                        logistics_order_id: logisticsOrderId
-                    };
+                    for (const product of logisticsOrder.products) {
+                        // Формируем данные для статуса
+                        const statusData = {
+                            logistics_order_id: logisticsOrderId
+                        };
 
-                    // Если товар был передан из ПВЗ (sourceOppId !== 0), добавляем from_opp_id
-                    if (sourceOppId !== 0) {
-                        statusData.from_opp_id = sourceOppId;
+                        // Если товар был передан из ПВЗ (sourceOppId !== 0), добавляем from_opp_id
+                        if (sourceOppId !== 0) {
+                            statusData.from_opp_id = sourceOppId;
+                        }
+
+                        // Вставляем запись в order_product_statuses
+                        await client.query(
+                            `INSERT INTO order_product_statuses (order_id, product_id, order_product_status, count, date, data)
+                             VALUES ($1, $2, 'sent_to_logistics', $3, NOW(), $4)`,
+                            [
+                                product.clientOrderId,
+                                product.productId,
+                                product.count,
+                                JSON.stringify(statusData)
+                            ]
+                        );
                     }
-
-                    // Вставляем запись в order_product_statuses
-                    await client.query(
-                        `INSERT INTO order_product_statuses (order_id, product_id, order_product_status, count, date, data)
-                         VALUES ($1, $2, 'sent_to_logistics', $3, NOW(), $4)`,
-                        [
-                            product.clientOrderId,
-                            product.productId,
-                            product.count,
-                            JSON.stringify(statusData)
-                        ]
-                    );
                 }
             }
 
@@ -360,7 +515,6 @@ class OuterLogisticsService {
             }
         }
     }
-
 
 
 }

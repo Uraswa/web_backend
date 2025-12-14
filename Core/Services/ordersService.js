@@ -979,6 +979,131 @@ class OrdersService {
             client.release();
         }
     }
+
+    /**
+     * Передача товара в логистическую доставку
+     * @param {number} orderId - ID заказа
+     * @param {number} logisticsOrderIdentifier - ID логистического заказа
+     * @param {number} productId - ID товара
+     * @param {number} count - Количество товара
+     * @param {number} oppId - ID ПВЗ, откуда передается товар
+     * @returns {Promise<Object>} Результат операции
+     */
+    async giveProductToDelivery(orderId, logisticsOrderIdentifier, productId, count, oppId) {
+        const client = await Database.GetMasterClient();
+
+        try {
+            await client.query('BEGIN');
+
+            // Проверяем, что заказ существует
+            const orderCheck = await client.query(
+                `SELECT o.order_id
+                 FROM orders o
+                 WHERE o.order_id = $1`,
+                [orderId]
+            );
+
+            if (orderCheck.rows.length === 0) {
+                throw new Error('Заказ не найден');
+            }
+
+            // Проверяем, что товар есть в заказе
+            const productCheck = await client.query(
+                `SELECT op.ordered_count
+                 FROM order_products op
+                 WHERE op.order_id = $1 AND op.product_id = $2`,
+                [orderId, productId]
+            );
+
+            if (productCheck.rows.length === 0) {
+                throw new Error('Товар не найден в заказе');
+            }
+
+            // Получаем текущее распределение товара
+            const statusInfo = await this.getProductStatuses(productId, orderId);
+            const distribution = statusInfo.data.current_distribution;
+
+            // Проверяем, что в указанном ПВЗ есть достаточно товара
+            const countInOpp = distribution.by_opp[oppId] || 0;
+            if (count > countInOpp) {
+                throw new Error(
+                    `Недостаточно товара в ПВЗ ${oppId}. Доступно: ${countInOpp}, требуется: ${count}`
+                );
+            }
+
+            await client.query('COMMIT');
+
+            // Вызываем outerLogisticsService.giveProductToDelivery
+            const outerLogisticsService = (await import('./outerLogisticsService.js')).default;
+            const logisticsResult = await outerLogisticsService.giveProductToDelivery(
+                orderId,
+                logisticsOrderIdentifier,
+                productId,
+                count,
+                oppId
+            );
+
+            if (!logisticsResult.success) {
+                throw new Error(logisticsResult.error);
+            }
+
+            return {
+                success: true,
+                data: {
+                    message: 'Товар передан в логистическую доставку',
+                    order_id: orderId,
+                    product_id: productId,
+                    count: count,
+                    opp_id: oppId,
+                    logistics_order_id: logisticsOrderIdentifier,
+                    logistics_info: logisticsResult.data
+                }
+            };
+
+        } catch (error) {
+            await client.query('ROLLBACK');
+            console.error('Ошибка в giveProductToDelivery:', error);
+            return {
+                success: false,
+                error: error.message
+            };
+        } finally {
+            client.release();
+        }
+    }
+
+    /**
+     * Прием товаров из логистической доставки в ПВЗ
+     * @param {number} logisticsOrderIdentifier - ID логистического заказа
+     * @returns {Promise<Object>} Результат операции
+     */
+    async receiveProductFromLogistics(logisticsOrderIdentifier) {
+        try {
+            // Вызываем outerLogisticsService.addProductsToOpp
+            const outerLogisticsService = (await import('./outerLogisticsService.js')).default;
+            const result = await outerLogisticsService.addProductsToOpp(logisticsOrderIdentifier);
+
+            if (!result.success) {
+                throw new Error(result.error);
+            }
+
+            return {
+                success: true,
+                data: {
+                    message: 'Товары из логистического заказа получены в ПВЗ',
+                    logistics_order_id: logisticsOrderIdentifier,
+                    logistics_info: result.data
+                }
+            };
+
+        } catch (error) {
+            console.error('Ошибка в receiveProductFromLogistics:', error);
+            return {
+                success: false,
+                error: error.message
+            };
+        }
+    }
 }
 
 export default new OrdersService();
