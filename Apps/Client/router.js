@@ -3,6 +3,7 @@ import FeedbackController from './Controller/FeedbackController.js';
 import CartController from './Controller/CartController.js';
 import OrderController from './Controller/OrderController.js';
 import authMiddleware from "../../Core/Middleware/authMiddleware.js";
+import CategoryController from "./Controller/CategoryController.js";
 
 export default (router) => {
 
@@ -35,4 +36,7 @@ export default (router) => {
     router.get('/api/orders', authMiddleware, OrderController.getUserOrders);
     router.get('/api/orders/:orderId', authMiddleware, OrderController.getOrderDetails);
     router.get('/api/orders/success/:orderId', authMiddleware, OrderController.orderSuccess);
+
+//Категории
+    router.get('/api/categories/getFilters', CategoryController.getFilters);
 }
