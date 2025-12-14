@@ -1,5 +1,9 @@
 ﻿// ===== Core\Services\outerLogisticsService.js =====
 import {Database} from "../Model/Database.js";
+import {
+    ArrivedInOppFromLogisticsDto,
+    SentToLogisticsDto
+} from './order_product_statuses_dtos/index.js';
 
 class OuterLogisticsService {
 
@@ -135,12 +139,6 @@ class OuterLogisticsService {
                 );
             }
 
-            // Формируем данные для статуса
-            const statusData = {
-                logistics_order_id: logisticsOrderIdentifier,
-                from_opp_id: oppId
-            };
-
             // Добавляем статус sent_to_logistics
             await client.query(
                 `INSERT INTO order_product_statuses (order_id, product_id, order_product_status, count, date, data)
@@ -149,7 +147,7 @@ class OuterLogisticsService {
                     orderId,
                     productId,
                     count,
-                    JSON.stringify(statusData)
+                    JSON.stringify(new SentToLogisticsDto(logisticsOrderIdentifier, oppId))
                 ]
             );
 
@@ -204,12 +202,6 @@ class OuterLogisticsService {
 
             // Для каждого товара в логистическом заказе добавляем статус arrived_in_opp
             for (const product of products) {
-                const statusData = {
-                    from_logistics_order_id: logisticsOrderIdentifier,
-                    is_target_opp: true,
-                    opp_id: targetOppId
-                };
-
                 await client.query(
                     `INSERT INTO order_product_statuses (order_id, product_id, order_product_status, count, date, data)
                      VALUES ($1, $2, 'arrived_in_opp', $3, NOW(), $4)`,
@@ -217,7 +209,7 @@ class OuterLogisticsService {
                         product.clientOrderId,
                         product.productId,
                         product.count,
-                        JSON.stringify(statusData)
+                        JSON.stringify(new ArrivedInOppFromLogisticsDto(logisticsOrderIdentifier, targetOppId))
                     ]
                 );
             }
@@ -462,16 +454,6 @@ class OuterLogisticsService {
                     const sourceOppId = logisticsOrder.source_opp_id;
 
                     for (const product of logisticsOrder.products) {
-                        // Формируем данные для статуса
-                        const statusData = {
-                            logistics_order_id: logisticsOrderId
-                        };
-
-                        // Если товар был передан из ПВЗ (sourceOppId !== 0), добавляем from_opp_id
-                        if (sourceOppId !== 0) {
-                            statusData.from_opp_id = sourceOppId;
-                        }
-
                         // Вставляем запись в order_product_statuses
                         await client.query(
                             `INSERT INTO order_product_statuses (order_id, product_id, order_product_status, count, date, data)
@@ -480,7 +462,10 @@ class OuterLogisticsService {
                                 product.clientOrderId,
                                 product.productId,
                                 product.count,
-                                JSON.stringify(statusData)
+                                JSON.stringify(new SentToLogisticsDto(
+                                    logisticsOrderId,
+                                    sourceOppId !== 0 ? sourceOppId : null
+                                ))
                             ]
                         );
                     }

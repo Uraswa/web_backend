@@ -1,5 +1,13 @@
 ﻿import { Database } from "../Model/Database.js";
 import OuterLogisticsService from "./OuterLogisticsService.js";
+import {
+    ArrivedInOppFromSellerDto,
+    ArrivedInOppReturnOrderDto,
+    SentToLogisticsReturnDto,
+    DeliveredDto,
+    RefundedDto,
+    WaitingForProductArrivalDto
+} from './order_product_statuses_dtos/index.js';
 
 class OrdersService {
 
@@ -328,10 +336,7 @@ class OrdersService {
                         order.order_id,
                         product.product_id,
                         product.count,
-                        JSON.stringify({
-                            order_id: order.order_id,
-                            initial_reservation: true
-                        })
+                        JSON.stringify(new WaitingForProductArrivalDto(order.order_id))
                     ]
                 );
             }
@@ -476,11 +481,11 @@ class OrdersService {
                             orderId,
                             row.product_id,
                             distribution.waiting_for_product_arrival_in_opp,
-                            JSON.stringify({
+                            JSON.stringify(new RefundedDto(
                                 reason,
-                                from_status: 'waiting_for_product_arrival_in_opp',
-                                returned_to_stock: true
-                            })
+                                'waiting_for_product_arrival_in_opp',
+                                { returnedToStock: true }
+                            ))
                         ]
                     );
                 }
@@ -542,12 +547,12 @@ class OrdersService {
                                 returnOrder.order_id,
                                 product.product_id,
                                 distribution.at_target_opp,
-                                JSON.stringify({
-                                    opp_id: targetOppId,
-                                    is_start_opp: true,
-                                    return_order: true,
-                                    original_order_id: orderId
-                                })
+                                JSON.stringify(new ArrivedInOppReturnOrderDto(
+                                    targetOppId,
+                                    true,  // is_start_opp
+                                    false, // is_target_opp
+                                    orderId
+                                ))
                             ]
                         );
                     }
@@ -562,12 +567,12 @@ class OrdersService {
                                 returnOrder.order_id,
                                 product.product_id,
                                 distribution.at_start_opp,
-                                JSON.stringify({
-                                    // TODO: нужно получить ID исходного ПВЗ из истории статусов
-                                    is_target_opp: true,
-                                    return_order: true,
-                                    original_order_id: orderId
-                                })
+                                JSON.stringify(new ArrivedInOppReturnOrderDto(
+                                    null,  // opp_id - TODO: нужно получить ID исходного ПВЗ из истории статусов
+                                    false, // is_start_opp
+                                    true,  // is_target_opp
+                                    orderId
+                                ))
                             ]
                         );
                     }
@@ -582,11 +587,10 @@ class OrdersService {
                                     returnOrder.order_id,
                                     product.product_id,
                                     count,
-                                    JSON.stringify({
-                                        previous_logistics_order_id: parseInt(logisticsOrderId),
-                                        return_order: true,
-                                        original_order_id: orderId
-                                    })
+                                    JSON.stringify(new SentToLogisticsReturnDto(
+                                        parseInt(logisticsOrderId),
+                                        orderId
+                                    ))
                                 ]
                             );
                         }
@@ -623,11 +627,11 @@ class OrdersService {
                             orderId,
                             row.product_id,
                             distribution.at_start_opp,
-                            JSON.stringify({
+                            JSON.stringify(new RefundedDto(
                                 reason,
-                                from_status: 'at_start_opp',
-                                return_order_created: true
-                            })
+                                'at_start_opp',
+                                { returnOrderCreated: true }
+                            ))
                         ]
                     );
                 }
@@ -641,11 +645,11 @@ class OrdersService {
                             orderId,
                             row.product_id,
                             distribution.at_target_opp,
-                            JSON.stringify({
+                            JSON.stringify(new RefundedDto(
                                 reason,
-                                from_status: 'at_target_opp',
-                                return_order_created: true
-                            })
+                                'at_target_opp',
+                                { returnOrderCreated: true }
+                            ))
                         ]
                     );
                 }
@@ -660,12 +664,14 @@ class OrdersService {
                                 orderId,
                                 row.product_id,
                                 count,
-                                JSON.stringify({
+                                JSON.stringify(new RefundedDto(
                                     reason,
-                                    from_status: 'sent_to_logistics',
-                                    from_logistics_order_id: parseInt(logisticsOrderId),
-                                    return_order_created: true
-                                })
+                                    'sent_to_logistics',
+                                    {
+                                        returnOrderCreated: true,
+                                        fromLogisticsOrderId: parseInt(logisticsOrderId)
+                                    }
+                                ))
                             ]
                         );
                     }
@@ -808,11 +814,7 @@ class OrdersService {
                     orderId,
                     productId,
                     count,
-                    JSON.stringify({
-                        opp_id: oppId,
-                        is_start_opp: true,
-                        from_seller: true
-                    })
+                    JSON.stringify(new ArrivedInOppFromSellerDto(oppId))
                 ]
             );
 
@@ -915,10 +917,7 @@ class OrdersService {
                             orderId,
                             product.product_id,
                             countInTargetOpp,
-                            JSON.stringify({
-                                opp_id: targetOppId,
-                                delivered_to_customer: true
-                            })
+                            JSON.stringify(new DeliveredDto(targetOppId))
                         ]
                     );
 
