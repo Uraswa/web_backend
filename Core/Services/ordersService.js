@@ -845,6 +845,140 @@ class OrdersService {
             client.release();
         }
     }
+
+    /**
+     * Выдача заказа покупателю из ПВЗ
+     * @param {number} orderId - ID заказа
+     * @param {number} oppId - ID ПВЗ, откуда выдается заказ
+     * @returns {Promise<Object>} Результат операции
+     */
+    async deliverOrder(orderId, oppId) {
+        const client = await Database.GetMasterClient();
+
+        try {
+            await client.query('BEGIN');
+
+            // Получаем информацию о заказе
+            const orderResult = await client.query(
+                `SELECT o.order_id, o.opp_id as target_opp_id, o.receiver_id
+                 FROM orders o
+                 WHERE o.order_id = $1`,
+                [orderId]
+            );
+
+            if (orderResult.rows.length === 0) {
+                throw new Error('Заказ не найден');
+            }
+
+            const order = orderResult.rows[0];
+            const targetOppId = order.target_opp_id;
+
+            // Проверяем, что выдача происходит из целевого ПВЗ
+            if (oppId !== targetOppId) {
+                throw new Error(`Заказ можно выдать только из целевого ПВЗ ${targetOppId}`);
+            }
+
+            // Получаем все товары заказа
+            const productsResult = await client.query(
+                `SELECT op.product_id, op.ordered_count, p.name as product_name
+                 FROM order_products op
+                 JOIN products p ON op.product_id = p.product_id
+                 WHERE op.order_id = $1`,
+                [orderId]
+            );
+
+            if (productsResult.rows.length === 0) {
+                throw new Error('Товары в заказе не найдены');
+            }
+
+            let totalDelivered = 0;
+            let totalOrdered = 0;
+            let allProductsInTargetOpp = true;
+
+            // Обрабатываем каждый товар
+            for (const product of productsResult.rows) {
+                totalOrdered += product.ordered_count;
+
+                // Получаем распределение товара
+                const statusInfo = await this.getProductStatuses(product.product_id, orderId);
+                const distribution = statusInfo.data.current_distribution;
+
+                // Проверяем, сколько товара в целевом ПВЗ
+                const countInTargetOpp = distribution.by_opp[targetOppId] || 0;
+
+                if (countInTargetOpp > 0) {
+                    // Добавляем статус delivered для товаров в целевом ПВЗ
+                    await client.query(
+                        `INSERT INTO order_product_statuses (order_id, product_id, order_product_status, count, date, data)
+                         VALUES ($1, $2, 'delivered', $3, NOW(), $4)`,
+                        [
+                            orderId,
+                            product.product_id,
+                            countInTargetOpp,
+                            JSON.stringify({
+                                opp_id: targetOppId,
+                                delivered_to_customer: true
+                            })
+                        ]
+                    );
+
+                    totalDelivered += countInTargetOpp;
+                }
+
+                // Проверяем, все ли товары этого типа были в целевом ПВЗ
+                if (countInTargetOpp < product.ordered_count) {
+                    allProductsInTargetOpp = false;
+                }
+            }
+
+            if (totalDelivered === 0) {
+                throw new Error('Нет товаров для выдачи в целевом ПВЗ');
+            }
+
+            // Если все товары были в целевом ПВЗ, завершаем заказ
+            if (allProductsInTargetOpp && totalDelivered === totalOrdered) {
+                await client.query(
+                    `INSERT INTO order_statuses (order_id, status, date, data)
+                     VALUES ($1, 'completed', NOW(), $2)`,
+                    [
+                        orderId,
+                        JSON.stringify({
+                            completed_at: new Date().toISOString(),
+                            opp_id: targetOppId,
+                            all_products_delivered: true
+                        })
+                    ]
+                );
+            }
+
+            await client.query('COMMIT');
+
+            return {
+                success: true,
+                data: {
+                    message: allProductsInTargetOpp
+                        ? 'order_done'
+                        : 'order_not_done',
+                    order_id: orderId,
+                    opp_id: oppId,
+                    delivered_count: totalDelivered,
+                    total_ordered: totalOrdered,
+                    is_completed: allProductsInTargetOpp && totalDelivered === totalOrdered,
+                    partial_delivery: !allProductsInTargetOpp
+                }
+            };
+
+        } catch (error) {
+            await client.query('ROLLBACK');
+            console.error('Ошибка в deliverOrder:', error);
+            return {
+                success: false,
+                error: error.message
+            };
+        } finally {
+            client.release();
+        }
+    }
 }
 
 export default new OrdersService();
