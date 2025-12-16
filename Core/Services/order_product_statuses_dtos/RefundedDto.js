@@ -19,6 +19,7 @@ class RefundedDto {
      * @param {boolean} options.returnedToStock - Товар возвращен на склад продавца
      * @param {boolean} options.returnOrderCreated - Создан обратный заказ для возврата
      * @param {number} options.fromLogisticsOrderId - ID логистического заказа (если возврат из логистики)
+     * @param {number} options.opp_id - ID ПВЗ в который товар был возвращен при получении.
      */
     constructor(reason, fromStatus, options = {}) {
         this.reason = reason;
@@ -32,6 +33,10 @@ class RefundedDto {
         }
         if (options.fromLogisticsOrderId) {
             this.from_logistics_order_id = options.fromLogisticsOrderId;
+        }
+
+        if (options.opp_id) {
+            this.opp_id = options.opp_id;
         }
     }
 
@@ -49,6 +54,10 @@ class RefundedDto {
         }
         if (this.from_logistics_order_id !== undefined) {
             result.from_logistics_order_id = this.from_logistics_order_id;
+        }
+
+        if (this.opp_id !== undefined) {
+            result.opp_id = this.opp_id;
         }
 
         return result;

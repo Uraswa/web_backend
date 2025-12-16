@@ -13,12 +13,17 @@ class SentToLogisticsDto {
     /**
      * @param {number} logisticsOrderId - ID логистического заказа
      * @param {number|null} fromOppId - ID ПВЗ, откуда забран товар (опционально)
+     * @param previousLogisticsOrderId - ID предыдущего логистического заказа
      */
-    constructor(logisticsOrderId, fromOppId = null) {
+    constructor(logisticsOrderId, fromOppId = null, previousLogisticsOrderId = null) {
         this.logistics_order_id = logisticsOrderId;
 
         if (fromOppId !== null && fromOppId !== 0) {
             this.from_opp_id = fromOppId;
+        }
+
+        if (previousLogisticsOrderId !== null && previousLogisticsOrderId !== 0) {
+            this.previous_logistics_order_id = Number.parseInt(previousLogisticsOrderId);
         }
     }
 
@@ -29,6 +34,10 @@ class SentToLogisticsDto {
 
         if (this.from_opp_id !== undefined) {
             result.from_opp_id = this.from_opp_id;
+        }
+
+        if (this.previous_logistics_order_id !== undefined) {
+            result.previous_logistics_order_id = this.previous_logistics_order_id;
         }
 
         return result;
