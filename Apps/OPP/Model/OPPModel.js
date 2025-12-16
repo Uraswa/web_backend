@@ -79,7 +79,7 @@ class OPPModel {
                         products_count: totalProductsCount,
                         products_in_target_opp: productsInTargetOpp,
                         total_amount: totalAmount.toFixed(2),
-                        can_be_issued: productsInTargetOpp > 0 && orderRow.order_status !== 'completed'
+                        can_be_issued: productsInTargetOpp > 0 && orderRow.order_status !== 'done'
                     });
                 }
             }
@@ -102,7 +102,7 @@ class OPPModel {
             // Он автоматически:
             // 1. Проверяет что товары в целевом ПВЗ
             // 2. Создает статусы 'delivered' для всех товаров
-            // 3. Устанавливает order_status = 'completed' если все товары выданы
+            // 3. Устанавливает order_status = 'done' если все товары выданы
             const result = await OrdersService.deliverOrder(order_id, opp_id);
 
             if (!result.success) {
@@ -117,17 +117,17 @@ class OPPModel {
                 // Обновляем order_statuses с информацией о том, кто выдал
                 const existingStatus = await client.query(
                     `SELECT * FROM order_statuses
-                     WHERE order_id = $1 AND status = 'completed'
+                     WHERE order_id = $1 AND status = 'done'
                      ORDER BY date DESC LIMIT 1`,
                     [order_id]
                 );
 
                 if (existingStatus.rows.length > 0) {
-                    // Обновляем существующий статус completed
+                    // Обновляем существующий статус done
                     await client.query(
                         `UPDATE order_statuses
-                         SET data = jsonb_set(COALESCE(data, '{}'::jsonb), '{issued_by}', $2::text::jsonb)
-                         WHERE order_id = $1 AND status = 'completed'`,
+                         SET data = json_build_object('issued_by', $2::text)
+                         WHERE order_id = $1 AND status = 'done'`,
                         [order_id, issued_by_user_id.toString()]
                     );
                 }
