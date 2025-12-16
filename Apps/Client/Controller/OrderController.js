@@ -1,5 +1,6 @@
 ﻿import OrderModel from "../Model/OrderModel.js";
 import CartService from "../../../Core/Services/cartService.js";
+import ordersService from "../../../Core/Services/ordersService.js";
 
 class OrderController {
 
@@ -29,12 +30,10 @@ class OrderController {
             // Подготавливаем данные для заказа
             const orderItems = cart.items.map(item => ({
                 product_id: item.product_id,
-                quantity: item.quantity,
-                price: item.product.price
+                count: item.quantity
             }));
 
-            // Создаем заказ
-            const order = await OrderModel.createFromCart(user.user_id, opp_id, orderItems);
+            const order = await ordersService.createOrder(user.user_id, opp_id, orderItems);
 
             // Очищаем корзину после создания заказа
             await CartService.clearCart(user.user_id);
@@ -52,6 +51,41 @@ class OrderController {
             res.status(500).json({
                 success: false,
                 error: 'Ошибка при создании заказа'
+            });
+        }
+    }
+
+    async cancelOrder(req, res){
+        try {
+            const user = req.user;
+            const { order_id } = req.body;
+
+            if (!order_id) {
+                return res.status(404).json({
+                    success: false,
+                    error: 'order_not_found'
+                });
+            }
+
+            const order = await OrderModel.findById(order_id);
+            if (!order || order.receiver_id !== user.user_id) {
+                return res.status(404).json({
+                    success: false,
+                    error: 'order_not_found'
+                });
+            }
+
+            let cancelOrderResult = await ordersService.cancelOrder(order_id);
+            return res.status(200).json({
+                success: cancelOrderResult.success
+            });
+
+
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({
+                success: false,
+                error: 'Ошибка при отмене заказа'
             });
         }
     }
@@ -148,7 +182,6 @@ class OrderController {
                 data: {
                     message: 'Заказ успешно создан!',
                     order_id: order.order_id,
-                    status: order.current_status,
                     delivery_point: order.address
                 }
             });

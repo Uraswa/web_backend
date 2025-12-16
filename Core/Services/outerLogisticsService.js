@@ -1,9 +1,11 @@
 ﻿// ===== Core\Services\outerLogisticsService.js =====
 import {Database} from "../Model/Database.js";
 import {
-    ArrivedInOppFromLogisticsDto,
+    ArrivedInOppFromLogisticsDto, PlanOrderDeliveryOrderDto,
     SentToLogisticsDto
 } from './order_product_statuses_dtos/index.js';
+import ordersService from "./ordersService.js";
+
 
 class OuterLogisticsService {
 
@@ -20,10 +22,8 @@ class OuterLogisticsService {
      * @param {number} oppId - ID ПВЗ, куда прибыл товар
      * @returns {Promise<Object>} Результат операции
      */
-    async orderReceiveProduct(orderId, productId, count, oppId) {
+    async orderReceiveProduct(orderId, productId, count, oppId, auto_add_to_logistics = false) {
         try {
-            const ordersService = (await import('./ordersService.js')).default;
-
             // Получаем информацию о заказе
             const orderResult = await Database.query(
                 `SELECT o.order_id, o.opp_id as target_opp_id, o.receiver_id
@@ -70,7 +70,12 @@ class OuterLogisticsService {
             // Проверяем, что все товары в at_start_opp
             if (allProductsReady && totalAtStartOpp === totalOrdered) {
                 // Все товары готовы к отправке - вызываем planOrderDelivery
-                const planResult = await this.planOrderDelivery([order]);
+                const planResult = await this.planOrderDelivery([
+                    new PlanOrderDeliveryOrderDto(
+                        order.order_id,
+                        order.receiver_id,
+                        order.target_opp_id)
+                ],  null, auto_add_to_logistics);
 
                 return {
                     success: true,
@@ -317,14 +322,13 @@ class OuterLogisticsService {
     /**
      * Планирование доставки для массива заказов
      * Создает логистические заказы для доставки товаров в целевые ПВЗ
-     * @param {Array} orders - Массив заказов (обычно обратные заказы при отмене)
+     * @param {PlanOrderDeliveryOrderDto[]} orders - Массив заказов для которых нужно спланировать логистику
      * @returns {Promise<Object>} Результат планирования с созданными логистическими заказами
      */
     async planOrderDelivery(orders, client = null, auto_add_to_logistics = true) {
         let shouldReleaseClient = false;
 
         try {
-            const ordersService = (await import('./ordersService.js')).default;
 
             // Создаем подключение к БД если не передано
             if (!client) {
@@ -337,11 +341,11 @@ class OuterLogisticsService {
 
             for (const order of orders) {
                 const orderId = order.order_id;
-                const targetOppId = order.opp_id;
+                const targetOppId = order.target_opp_id;
                 const receiverId = order.receiver_id;
 
                 // Получаем все товары заказа
-                const productsResult = await Database.query(
+                const productsResult = await client.query(
                     `SELECT op.product_id,
                             op.ordered_count,
                             op.price,
@@ -356,7 +360,7 @@ class OuterLogisticsService {
                     const productId = product.product_id;
 
                     // Получаем текущее распределение товара
-                    const statusInfo = await ordersService.getProductStatuses(productId, orderId);
+                    const statusInfo = await ordersService.getProductStatuses(productId, orderId, client);
 
                     if (!statusInfo.success) {
                         console.error(`Ошибка при получении статусов товара ${productId}:`, statusInfo.error);
@@ -396,14 +400,14 @@ class OuterLogisticsService {
 
                     // Обрабатываем товары в статусе sent_to_logistics_unvalid
                     if (Object.keys(distribution.sent_to_logistics_unvalid).length > 0) {
-                        const totalUnvalidCount = Object.values(distribution.sent_to_logistics_unvalid)
-                            .reduce((sum, count) => sum + count, 0);
 
-                        if (totalUnvalidCount > 0) {
+                        for (let unvalidLogisticsOrderId in distribution.sent_to_logistics_unvalid) {
+                            if (distribution.sent_to_logistics_unvalid[unvalidLogisticsOrderId] === 0) continue;
+
                             const startOppId = 0;
                             const routeKey = `${startOppId}-${targetOppId}`;
 
-                            if (!routeMap.has(routeKey)) {
+                             if (!routeMap.has(routeKey)) {
                                 routeMap.set(routeKey, {
                                     sourceOppId: startOppId,
                                     targetOppId: targetOppId,
@@ -416,7 +420,8 @@ class OuterLogisticsService {
                                 productName: product.product_name,
                                 clientOrderId: orderId,
                                 clientReceiverId: receiverId,
-                                count: totalUnvalidCount,
+                                count: distribution.sent_to_logistics_unvalid[unvalidLogisticsOrderId],
+                                previousLogisticsOrderId: unvalidLogisticsOrderId,
                                 price: product.price
                             });
                         }
@@ -464,7 +469,8 @@ class OuterLogisticsService {
                                 product.count,
                                 JSON.stringify(new SentToLogisticsDto(
                                     logisticsOrderId,
-                                    sourceOppId !== 0 ? sourceOppId : null
+                                    sourceOppId !== 0 ? sourceOppId : null,
+                                    product.previousLogisticsOrderId ? product.previousLogisticsOrderId : null
                                 ))
                             ]
                         );

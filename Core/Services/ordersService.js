@@ -1,4 +1,4 @@
-﻿import { Database } from "../Model/Database.js";
+﻿import {Database} from "../Model/Database.js";
 import OuterLogisticsService from "./OuterLogisticsService.js";
 import {
     ArrivedInOppFromSellerDto,
@@ -6,7 +6,7 @@ import {
     SentToLogisticsReturnDto,
     DeliveredDto,
     RefundedDto,
-    WaitingForProductArrivalDto
+    WaitingForProductArrivalDto, PlanOrderDeliveryOrderDto
 } from './order_product_statuses_dtos/index.js';
 
 class OrdersService {
@@ -17,18 +17,17 @@ class OrdersService {
      * @param {number} orderId - ID заказа (опционально)
      * @returns {Promise<Object>} Статусы с количеством
      */
-    async getProductStatuses(productId, orderId = null) {
+    async getProductStatuses(productId, orderId = null, client = null) {
         try {
             let query = `
-                SELECT
-                    ops.order_product_status,
-                    ops.count,
-                    ops.date,
-                    ops.data,
-                    o.order_id,
-                    o.opp_id as target_opp_id
+                SELECT ops.order_product_status,
+                       ops.count,
+                       ops.date,
+                       ops.data,
+                       o.order_id,
+                       o.opp_id as target_opp_id
                 FROM order_product_statuses ops
-                LEFT JOIN orders o ON ops.order_id = o.order_id
+                         LEFT JOIN orders o ON ops.order_id = o.order_id
                 WHERE ops.product_id = $1
             `;
 
@@ -41,7 +40,7 @@ class OrdersService {
 
             query += ` ORDER BY ops.date ASC`;
 
-            const result = await Database.query(query, params);
+            const result = await (client ? client : Database).query(query, params);
 
             // Группируем по статусам и суммируем количество
             const statusMap = {};
@@ -101,7 +100,7 @@ class OrdersService {
             at_target_opp: 0,        // вычисляемый: arrived_in_opp с is_target_opp: true,
             by_opp: {},
             sent_to_logistics: {},   // {logistics_order_id: count}
-            sent_to_logistics_unvalid: {}, // товары, не принадлежащие своему логистическому заказу
+            sent_to_logistics_unvalid: {}, // товары, не принадлежащие своему логистическому заказу (бывает когда товар везли для заказа, но в процессе перевозки заказ был отменен)
             delivered: 0,
             refunded: 0
         };
@@ -182,7 +181,7 @@ class OrdersService {
                             if (distribution.sent_to_logistics[prevLogisticsId] === 0) {
                                 delete distribution.sent_to_logistics[prevLogisticsId];
                             }
-                        } else if (distribution.sent_to_logistics_unvalid[prevLogisticsId] >= count){
+                        } else if (distribution.sent_to_logistics_unvalid[prevLogisticsId] >= count) {
                             distribution.sent_to_logistics_unvalid[prevLogisticsId] -= count;
                             if (distribution.sent_to_logistics_unvalid[prevLogisticsId] === 0) {
                                 delete distribution.sent_to_logistics_unvalid[prevLogisticsId];
@@ -214,6 +213,11 @@ class OrdersService {
                 case 'delivered':
                     // Товар выдан покупателю из целевого ПВЗ
                     distribution.at_target_opp -= count;
+
+                    if (arrivedInopp[data.opp_id]) {
+                        arrivedInopp[data.opp_id] -= count;
+                    }
+
                     distribution.delivered += count;
                     break;
 
@@ -226,8 +230,18 @@ class OrdersService {
                         distribution.waiting_for_product_arrival_in_opp -= count;
                     } else if (fromStatus === 'at_start_opp') {
                         distribution.at_start_opp -= count;
+
+                        if (arrivedInopp[data.opp_id]) {
+                            arrivedInopp[data.opp_id] -= count;
+                        }
+
                     } else if (fromStatus === 'at_target_opp') {
                         distribution.at_target_opp -= count;
+
+                        if (arrivedInopp[data.opp_id]) {
+                            arrivedInopp[data.opp_id] -= count;
+                        }
+
                     } else if (fromStatus === 'sent_to_logistics') {
                         // Нужно найти и уменьшить соответствующий logistics_order_id
                         // Это сложнее, так как нужно знать конкретный logistics_order_id
@@ -371,8 +385,8 @@ class OrdersService {
                         opp.latitude,
                         opp.longitude
                  FROM orders o
-                 JOIN user_profiles up ON o.receiver_id = up.user_id
-                 JOIN opp ON o.opp_id = opp.opp_id
+                          JOIN user_profiles up ON o.receiver_id = up.user_id
+                          JOIN opp ON o.opp_id = opp.opp_id
                  WHERE o.order_id = $1`,
                 [orderId]
             );
@@ -385,16 +399,16 @@ class OrdersService {
 
             // 2. Получаем товары заказа
             const productsResult = await Database.query(
-                `SELECT op.*, 
-                        p.name, 
-                        p.photos, 
+                `SELECT op.*,
+                        p.name,
+                        p.photos,
                         p.description,
                         p.shop_id,
-                        s.name as shop_name,
+                        s.name     as shop_name,
                         s.owner_id as seller_id
                  FROM order_products op
-                 JOIN products p ON op.product_id = p.product_id
-                 JOIN shops s ON p.shop_id = s.shop_id
+                          JOIN products p ON op.product_id = p.product_id
+                          JOIN shops s ON p.shop_id = s.shop_id
                  WHERE op.order_id = $1`,
                 [orderId]
             );
@@ -439,13 +453,13 @@ class OrdersService {
                         op.product_id,
                         op.ordered_count,
                         op.price,
-                        p.name as product_name,
+                        p.name     as product_name,
                         s.owner_id as seller_id,
                         s.shop_id
                  FROM orders o
-                 JOIN order_products op ON o.order_id = op.order_id
-                 JOIN products p ON op.product_id = p.product_id
-                 JOIN shops s ON p.shop_id = s.shop_id
+                          JOIN order_products op ON o.order_id = op.order_id
+                          JOIN products p ON op.product_id = p.product_id
+                          JOIN shops s ON p.shop_id = s.shop_id
                  WHERE o.order_id = $1`,
                 [orderId]
             );
@@ -531,10 +545,10 @@ class OrdersService {
      * @param {Object} client - Транзакция БД
      * @param {Array} products - Массив товаров для возврата [{product_id, count, seller_id, distribution, price, product_name, order_id}]
      * @param {string} reason - Причина возврата
-     * @param {number} targetOppId - ID целевого ПВЗ
+     * @param {number} prevOrderTargetId - ID целевого ПВЗ заказа, товары из которого возвращаем
      * @returns {Promise<Array>} Массив созданных обратных заказов
      */
-    async returnProducts(client, products, reason, targetOppId) {
+    async returnProducts(client, products, reason, prevOrderTargetId) {
         // 1. Обрабатываем товары в статусе waiting_for_product_arrival_in_opp
         for (const product of products) {
             if (product.distribution.waiting_for_product_arrival_in_opp > 0) {
@@ -556,7 +570,7 @@ class OrdersService {
                         JSON.stringify(new RefundedDto(
                             reason,
                             'waiting_for_product_arrival_in_opp',
-                            { returnedToStock: true }
+                            {returnedToStock: true}
                         ))
                     ]
                 );
@@ -587,12 +601,27 @@ class OrdersService {
         const returnOrders = [];
 
         for (const [sellerId, sellerProducts] of productsBySeller.entries()) {
+            //Нужно вычислить ПВЗ куда возвращаем
+            let sellerOppIds = new Set();
+            for (let sellerProduct of sellerProducts) {
+                for (let opp_id in sellerProduct.distribution.by_opp) {
+                    sellerOppIds.add(Number.parseInt(opp_id));
+                }
+            }
+
+            sellerOppIds.delete(prevOrderTargetId);
+            if (sellerOppIds.size === 0) {
+                throw new Error(`Ошибка: непонятно куда возвращать товар!`);
+            }
+
+            let [newTargetOppId] = sellerOppIds;
+
             // Создаем заказ типа 'client' для продавца (сумма = 0)
             const returnOrderResult = await client.query(
                 `INSERT INTO orders (order_type, receiver_id, opp_id, created_date)
                  VALUES ('client', $1, $2, NOW())
                  RETURNING *`,
-                [sellerId, targetOppId]
+                [sellerId, newTargetOppId]
             );
 
             const returnOrder = returnOrderResult.rows[0];
@@ -605,55 +634,23 @@ class OrdersService {
                     [returnOrder.order_id, product.product_id, product.returnableCount]
                 );
 
-                // Для товаров в at_target_opp: создаем статус arrived_in_opp с is_start_opp: true
-                if (product.distribution.at_target_opp > 0) {
+                for (let opp_id in product.distribution.by_opp) {
+                    if (product.distribution.by_opp[opp_id] === 0) continue;
                     await client.query(
                         `INSERT INTO order_product_statuses (order_id, product_id, order_product_status, count, date, data)
                          VALUES ($1, $2, 'arrived_in_opp', $3, NOW(), $4)`,
                         [
                             returnOrder.order_id,
                             product.product_id,
-                            product.distribution.at_target_opp,
+                            product.distribution.by_opp[opp_id],
                             JSON.stringify(new ArrivedInOppReturnOrderDto(
-                                targetOppId,
-                                true,  // is_start_opp
-                                false, // is_target_opp
+                                opp_id,
+                                opp_id === prevOrderTargetId,  // is_start_opp
+                                opp_id === newTargetOppId, // is_target_opp
                                 product.order_id
                             ))
                         ]
                     );
-                }
-
-                // Для товаров в at_start_opp: создаем статус arrived_in_opp с is_target_opp: true
-                if (product.distribution.at_start_opp > 0) {
-
-                    let targetopp_id = -1;
-                    if (Object.keys(product.distribution.by_opp).length !== 0) {
-                        //TODO КОСТЫЛЬ. НЕ ЧАСТАЯ СИТУАЦИЯ, КОГДА ПРОДАВЕЦ ОТПРАВИЛ ОДИН И ТОТ ЖЕ ТОВАР ИЗ НЕСКОЛЬКИХ РАЗНЫХ ПВЗ
-                        // ТАКОЙ СЛУЧАЙ ПОКА ЧТО НЕ РЕАЛИЗОВАН, ТАК КАК У ЗАКАЗА ЕСТЬ TARGET_OPP ПРЯМО В БД.
-                        // ПОЭТОМУ КОСТЫЛЮ TARGET_OPP НА ПЕРВЫЙ ПВЗ ИЗ СПИСКА
-                        targetopp_id = Object.keys(product.distribution.by_opp)[0]
-                    }
-
-                    for (let start_opp_id in product.distribution.by_opp) {
-                        await client.query(
-                        `INSERT INTO order_product_statuses (order_id, product_id, order_product_status, count, date, data)
-                         VALUES ($1, $2, 'arrived_in_opp', $3, NOW(), $4)`,
-                        [
-                            returnOrder.order_id,
-                            product.product_id,
-                            product.distribution.by_opp[start_opp_id],
-                            JSON.stringify(new ArrivedInOppReturnOrderDto(
-                                start_opp_id,  // opp_id
-                                false, // is_start_opp
-                                targetopp_id === start_opp_id,  // is_target_opp
-                                product.order_id
-                            ))
-                        ]
-                    );
-                    }
-
-
                 }
 
                 // Для товаров в sent_to_logistics: создаем статусы для каждого logistics_order_id
@@ -676,17 +673,19 @@ class OrdersService {
                 }
             }
 
-            returnOrders.push({
-                order_id: returnOrder.order_id,
-                receiver_id: sellerId,
-                opp_id: targetOppId,
-                original_order_id: sellerProducts[0].order_id
-            });
+            returnOrders.push(
+                new PlanOrderDeliveryOrderDto(
+                    returnOrder.order_id,
+                    sellerId,
+                    newTargetOppId,
+                    sellerProducts[0].order_id)
+            )
+
         }
 
         // 4. Планируем доставку для обратных заказов
         if (returnOrders.length > 0) {
-            const planResult = await OuterLogisticsService.planOrderDelivery(returnOrders);
+            const planResult = await OuterLogisticsService.planOrderDelivery(returnOrders, client);
             if (!planResult.success) {
                 throw new Error(`Ошибка при планировании доставки: ${planResult.error}`);
             }
@@ -696,8 +695,10 @@ class OrdersService {
         for (const product of products) {
             const distribution = product.distribution;
 
-            // at_start_opp
-            if (distribution.at_start_opp > 0) {
+            for (let opp_id in distribution.by_opp) {
+
+                if (distribution.by_opp[opp_id] === 0) continue;
+
                 await client.query(
                     `INSERT INTO order_product_statuses (order_id, product_id, order_product_status, count, date, data)
                      VALUES ($1, $2, 'refunded', $3, NOW(), $4)`,
@@ -707,26 +708,8 @@ class OrdersService {
                         distribution.at_start_opp,
                         JSON.stringify(new RefundedDto(
                             reason,
-                            'at_start_opp',
-                            { returnOrderCreated: true }
-                        ))
-                    ]
-                );
-            }
-
-            // at_target_opp
-            if (distribution.at_target_opp > 0) {
-                await client.query(
-                    `INSERT INTO order_product_statuses (order_id, product_id, order_product_status, count, date, data)
-                     VALUES ($1, $2, 'refunded', $3, NOW(), $4)`,
-                    [
-                        product.order_id,
-                        product.product_id,
-                        distribution.at_target_opp,
-                        JSON.stringify(new RefundedDto(
-                            reason,
-                            'at_target_opp',
-                            { returnOrderCreated: true }
+                            opp_id === prevOrderTargetId ? 'at_target_opp' : 'at_start_opp',
+                            {returnOrderCreated: true, opp_id: opp_id}
                         ))
                     ]
                 );
@@ -769,7 +752,7 @@ class OrdersService {
             const ordersResult = await Database.query(
                 `SELECT o.*, opp.address
                  FROM orders o
-                 JOIN opp ON o.opp_id = opp.opp_id
+                          JOIN opp ON o.opp_id = opp.opp_id
                  WHERE o.receiver_id = $1
                  ORDER BY o.created_date DESC`,
                 [userId]
@@ -820,7 +803,8 @@ class OrdersService {
             const productCheck = await client.query(
                 `SELECT op.ordered_count
                  FROM order_products op
-                 WHERE op.order_id = $1 AND op.product_id = $2`,
+                 WHERE op.order_id = $1
+                   AND op.product_id = $2`,
                 [orderId, productId]
             );
 
@@ -853,9 +837,8 @@ class OrdersService {
 
             await client.query('COMMIT');
 
-            // Вызываем outerLogisticsService.orderReceiveProduct для проверки готовности к отправке
-            const outerLogisticsService = (await import('./outerLogisticsService.js')).default;
-            const logisticsResult = await outerLogisticsService.orderReceiveProduct(orderId, productId, count, oppId);
+
+            const logisticsResult = await OuterLogisticsService.orderReceiveProduct(orderId, productId, count, oppId);
 
             return {
                 success: true,
@@ -918,8 +901,8 @@ class OrdersService {
             const productsResult = await client.query(
                 `SELECT op.product_id, op.ordered_count, op.price, p.name as product_name, s.owner_id as seller_id
                  FROM order_products op
-                 JOIN products p ON op.product_id = p.product_id
-                 JOIN shops s ON p.shop_id = s.shop_id
+                          JOIN products p ON op.product_id = p.product_id
+                          JOIN shops s ON p.shop_id = s.shop_id
                  WHERE op.order_id = $1`,
                 [orderId]
             );
@@ -1028,7 +1011,7 @@ class OrdersService {
             if (allProductsInTargetOpp && allProcessed) {
                 await client.query(
                     `INSERT INTO order_statuses (order_id, status, date, data)
-                     VALUES ($1, 'completed', NOW(), $2)`,
+                     VALUES ($1, 'done', NOW(), $2)`,
                     [
                         orderId,
                         JSON.stringify({
@@ -1104,7 +1087,8 @@ class OrdersService {
             const productCheck = await client.query(
                 `SELECT op.ordered_count
                  FROM order_products op
-                 WHERE op.order_id = $1 AND op.product_id = $2`,
+                 WHERE op.order_id = $1
+                   AND op.product_id = $2`,
                 [orderId, productId]
             );
 
@@ -1126,9 +1110,8 @@ class OrdersService {
 
             await client.query('COMMIT');
 
-            // Вызываем outerLogisticsService.giveProductToDelivery
-            const outerLogisticsService = (await import('./outerLogisticsService.js')).default;
-            const logisticsResult = await outerLogisticsService.giveProductToDelivery(
+            // Вызываем OuterLogisticsService.giveProductToDelivery
+            const logisticsResult = await OuterLogisticsService.giveProductToDelivery(
                 orderId,
                 logisticsOrderIdentifier,
                 productId,
@@ -1172,9 +1155,7 @@ class OrdersService {
      */
     async receiveProductFromLogistics(logisticsOrderIdentifier) {
         try {
-            // Вызываем outerLogisticsService.addProductsToOpp
-            const outerLogisticsService = (await import('./outerLogisticsService.js')).default;
-            const result = await outerLogisticsService.addProductsToOpp(logisticsOrderIdentifier);
+            const result = await OuterLogisticsService.addProductsToOpp(logisticsOrderIdentifier);
 
             if (!result.success) {
                 throw new Error(result.error);

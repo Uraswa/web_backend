@@ -17,6 +17,7 @@ import SentToLogisticsReturnDto from './SentToLogisticsReturnDto.js';
 import DeliveredDto from './DeliveredDto.js';
 import RefundedDto from './RefundedDto.js';
 import WaitingForProductArrivalDto from './WaitingForProductArrivalDto.js';
+import PlanOrderDeliveryOrderDto from './PlanOrderDeliveryOrderDto.js';
 
 export {
     ArrivedInOppFromSellerDto,
@@ -26,5 +27,6 @@ export {
     SentToLogisticsReturnDto,
     DeliveredDto,
     RefundedDto,
-    WaitingForProductArrivalDto
+    WaitingForProductArrivalDto,
+    PlanOrderDeliveryOrderDto
 };
