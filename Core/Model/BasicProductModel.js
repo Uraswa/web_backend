@@ -17,6 +17,27 @@ export default class BasicProductModel {
         return result.rows[0] || null;
     }
 
+    async findByIdWithVariants(productId) {
+        const query = `
+            SELECT p.*, pc.name as category_name, s.name as shop_name,                   
+       (SELECT json_agg(json_build_object(
+           'product_id', pv.product_id,
+           'variant', pv.variant
+        ))
+        FROM products pv
+        LEFT JOIN public.product_variants v on p.variant_group_id = v.variant_group_id
+        WHERE pv.variant_group_id IS NOT NULL
+          and pv.product_id != p.product_id and pv.variant_group_id = p.variant_group_id
+        ) as variants
+            FROM ${this.tableName} p
+            JOIN product_categories pc ON p.category_id = pc.category_id
+            JOIN shops s ON p.shop_id = s.shop_id
+            WHERE p.product_id = $1
+        `;
+        const result = await Database.query(query, [productId]);
+        return result.rows[0] || null;
+    }
+
     async findByShopId(shopId) {
         const query = `
             SELECT p.*, pc.name as category_name

@@ -1,5 +1,6 @@
 ﻿import OrderModel from "../Model/OrderModel.js";
 import CartService from "../../../Core/Services/cartService.js";
+import ordersService from "../../../Core/Services/ordersService.js";
 
 class OrderController {
 
@@ -9,17 +10,10 @@ class OrderController {
             const user = req.user;
             const { opp_id } = req.body;
 
-            if (!user) {
-                return res.status(401).json({
-                    success: false,
-                    error: 'Требуется авторизация'
-                });
-            }
-
             if (!opp_id) {
                 return res.status(400).json({
                     success: false,
-                    error: 'Не указан пункт выдачи'
+                    error: 'ppo_not_defined'
                 });
             }
 
@@ -29,19 +23,17 @@ class OrderController {
             if (!cart || !cart.items || cart.items.length === 0) {
                 return res.status(400).json({
                     success: false,
-                    error: 'Корзина пуста'
+                    error: 'cart_empty'
                 });
             }
 
             // Подготавливаем данные для заказа
             const orderItems = cart.items.map(item => ({
                 product_id: item.product_id,
-                quantity: item.quantity,
-                price: item.product.price
+                count: item.quantity
             }));
 
-            // Создаем заказ
-            const order = await OrderModel.createFromCart(user.user_id, opp_id, orderItems);
+            const order = await ordersService.createOrder(user.user_id, opp_id, orderItems);
 
             // Очищаем корзину после создания заказа
             await CartService.clearCart(user.user_id);
@@ -63,17 +55,45 @@ class OrderController {
         }
     }
 
+    async cancelOrder(req, res){
+        try {
+            const user = req.user;
+            const { order_id } = req.body;
+
+            if (!order_id) {
+                return res.status(404).json({
+                    success: false,
+                    error: 'order_not_found'
+                });
+            }
+
+            const order = await OrderModel.findById(order_id);
+            if (!order || order.receiver_id !== user.user_id) {
+                return res.status(404).json({
+                    success: false,
+                    error: 'order_not_found'
+                });
+            }
+
+            let cancelOrderResult = await ordersService.cancelOrder(order_id);
+            return res.status(200).json({
+                success: cancelOrderResult.success
+            });
+
+
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({
+                success: false,
+                error: 'Ошибка при отмене заказа'
+            });
+        }
+    }
+
     // Получение списка заказов пользователя
     async getUserOrders(req, res) {
         try {
             const user = req.user;
-
-            if (!user) {
-                return res.status(401).json({
-                    success: false,
-                    error: 'Требуется авторизация'
-                });
-            }
 
             const orders = await OrderModel.findByUserId(user.user_id);
 
@@ -110,19 +130,12 @@ class OrderController {
             const user = req.user;
             const { orderId } = req.params;
 
-            if (!user) {
-                return res.status(401).json({
-                    success: false,
-                    error: 'Требуется авторизация'
-                });
-            }
-
             const order = await OrderModel.findById(orderId);
 
             if (!order) {
                 return res.status(404).json({
                     success: false,
-                    error: 'Заказ не найден'
+                    error: 'order_not_found'
                 });
             }
 
@@ -130,7 +143,7 @@ class OrderController {
             if (order.receiver_id !== user.user_id) {
                 return res.status(403).json({
                     success: false,
-                    error: 'Доступ запрещен'
+                    error: 'access_denied'
                 });
             }
 
@@ -152,14 +165,15 @@ class OrderController {
     // Страница "Заказ сделан"
     async orderSuccess(req, res) {
         try {
+            const user = req.user;
             const { orderId } = req.params;
 
             const order = await OrderModel.findById(orderId);
 
-            if (!order) {
+            if (!order || order.receiver_id != user.user_id) {
                 return res.status(404).json({
                     success: false,
-                    error: 'Заказ не найден'
+                    error: 'order_not_found'
                 });
             }
 
@@ -168,7 +182,6 @@ class OrderController {
                 data: {
                     message: 'Заказ успешно создан!',
                     order_id: order.order_id,
-                    status: order.current_status,
                     delivery_point: order.address
                 }
             });

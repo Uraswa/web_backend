@@ -86,65 +86,6 @@ export default  class BasicOrderModel {
         return result.rows;
     }
 
-    async create(orderData) {
-        const client = await Database.GetMasterClient();
-        try {
-            await client.query('BEGIN');
-
-            // Создаем заказ
-            const orderQuery = `
-                INSERT INTO ${this.tableName} (order_type, receiver_id, opp_id)
-                VALUES ($1, $2, $3)
-                RETURNING *
-            `;
-            const orderResult = await client.query(orderQuery, [
-                orderData.order_type || 'client',
-                orderData.receiver_id,
-                orderData.opp_id
-            ]);
-            const order = orderResult.rows[0];
-
-            // Добавляем начальный статус
-            const statusQuery = `
-                INSERT INTO ${this.orderStatusesTable} (order_id, status)
-                VALUES ($1, $2)
-            `;
-            await client.query(statusQuery, [order.order_id, 'packing']);
-
-            await client.query('COMMIT');
-            return await this.findById(order.order_id);
-        } catch (error) {
-            await client.query('ROLLBACK');
-            throw error;
-        } finally {
-            client.release();
-        }
-    }
-
-    async addProductToOrder(orderId, productData) {
-        const query = `
-            INSERT INTO ${this.orderProductsTable} (order_id, product_id, ordered_count, price)
-            VALUES ($1, $2, $3, $4)
-            RETURNING *
-        `;
-        const result = await Database.query(query, [
-            orderId,
-            productData.product_id,
-            productData.ordered_count,
-            productData.price
-        ], true);
-        return result.rows[0];
-    }
-
-    async updateStatus(orderId, status, data = null) {
-        const query = `
-            INSERT INTO ${this.orderStatusesTable} (order_id, status, data)
-            VALUES ($1, $2, $3)
-            RETURNING *
-        `;
-        const result = await Database.query(query, [orderId, status, data], true);
-        return result.rows[0];
-    }
 
     async calculateTotal(orderId) {
         const query = `

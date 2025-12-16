@@ -1,8 +1,9 @@
-﻿import ProductModel from "../Model/ProductModel.js";
+﻿import BasicProductModel from "../Model/BasicProductModel.js";
 
 class CartService {
 
     _carts = {}; // Хранилище корзин в памяти: { userId: { items: [{product, quantity}], total } }
+    _basicProductModel = new BasicProductModel();
 
     constructor() {
         // Можно добавить периодическую очистку старых корзин
@@ -30,7 +31,7 @@ class CartService {
             for (const item of cart.items) {
                 try {
                     // Получаем актуальную информацию о товаре
-                    const product = await ProductModel.findById(item.product_id);
+                    const product = await this._basicProductModel.findById(item.product_id);
 
                     if (product) {
                         const itemTotal = product.price * item.quantity;
@@ -66,74 +67,35 @@ class CartService {
         }
     }
 
-    // Добавление товара в корзину
-    async addToCart(user_id, productId, quantity = 1) {
-        try {
-            // Проверяем существование товара
-            const product = await ProductModel.findById(productId);
-            if (!product) {
-                throw new Error('Товар не найден');
-            }
-
-            // Инициализируем корзину, если её нет
-            if (!this._carts[user_id]) {
-                this._carts[user_id] = {
-                    items: [],
-                    created_at: new Date(),
-                    updated_at: new Date()
-                };
-            }
-
-            const cart = this._carts[user_id];
-
-            // Проверяем, есть ли уже товар в корзине
-            const existingItemIndex = cart.items.findIndex(item => item.product_id == productId);
-
-            if (existingItemIndex !== -1) {
-                // Обновляем количество существующего товара
-                cart.items[existingItemIndex].quantity += parseInt(quantity);
-
-                // Если количество стало 0 или меньше, удаляем товар
-                if (cart.items[existingItemIndex].quantity <= 0) {
-                    cart.items.splice(existingItemIndex, 1);
-                }
-            } else {
-                // Добавляем новый товар
-                if (quantity > 0) {
-                    cart.items.push({
-                        product_id: parseInt(productId),
-                        quantity: parseInt(quantity),
-                        added_at: new Date()
-                    });
-                }
-            }
-
-            // Обновляем время изменения корзины
-            cart.updated_at = new Date();
-
-            return await this.getCartWithDetails(user_id);
-        } catch (error) {
-            console.error('Ошибка в addToCart:', error);
-            throw error;
-        }
-    }
-
     // Обновление количества товара в корзине
     async updateCartItem(user_id, productId, quantity) {
         try {
-            if (!this._carts[user_id]) {
+
+            if (!this._carts[user_id] && quantity === 0) {
                 return {
                     items: [],
                     total: 0,
                     item_count: 0
                 };
+            } else if (!this._carts[user_id] && quantity !== 0){
+                this._carts[user_id] = {
+                    items: [],
+                    updated_at: 0
+                }
             }
 
             const cart = this._carts[user_id];
-            const existingItemIndex = cart.items.findIndex(item => item.product_id == productId);
+            let existingItemIndex = cart.items.findIndex(item => item.product_id == productId);
 
-            if (existingItemIndex === -1) {
+            if (existingItemIndex === -1 && quantity === 0) {
                 return await this.getCartWithDetails(user_id);
+            } else if (existingItemIndex === -1) {
+                cart.items.push({
+                    product_id: productId,
+                    added_at: new Date(),
+                    quantity: 0
+                });
+                existingItemIndex = cart.items.length - 1;
             }
 
             if (quantity <= 0) {
@@ -151,37 +113,6 @@ class CartService {
             return await this.getCartWithDetails(user_id);
         } catch (error) {
             console.error('Ошибка в updateCartItem:', error);
-            throw error;
-        }
-    }
-
-    // Удаление товара из корзины
-    async removeFromCart(user_id, productId) {
-        try {
-            if (!this._carts[user_id]) {
-                return {
-                    items: [],
-                    total: 0,
-                    item_count: 0
-                };
-            }
-
-            const cart = this._carts[user_id];
-            const initialLength = cart.items.length;
-
-            // Фильтруем массив, удаляя товар
-            cart.items = cart.items.filter(item => item.product_id != productId);
-
-            if (cart.items.length === initialLength) {
-                throw new Error('Товар не найден в корзине');
-            }
-
-            // Обновляем время изменения корзины
-            cart.updated_at = new Date();
-
-            return await this.getCartWithDetails(user_id);
-        } catch (error) {
-            console.error('Ошибка в removeFromCart:', error);
             throw error;
         }
     }
