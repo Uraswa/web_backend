@@ -1,4 +1,4 @@
-﻿import ProductModel from "../Model/ProductModel.js";
+﻿import ProductModel from "../../Apps/Client/Model/ProductModel.js";
 
 class CartService {
 

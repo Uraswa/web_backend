@@ -2,6 +2,7 @@
 import FeedbackController from './Controller/FeedbackController.js';
 import CartController from './Controller/CartController.js';
 import OrderController from './Controller/OrderController.js';
+import CarouselController from './Controller/CarouselController.js';
 
 export default (router) => {
 
@@ -37,4 +38,7 @@ export default (router) => {
     router.get('/orders', OrderController.getUserOrders);
     router.get('/orders/:orderId', OrderController.getOrderDetails);
     router.get('/orders/success/:orderId', OrderController.orderSuccess);
+
+// Рекламная карусель
+    router.get('/carousel/slides', CarouselController.getSlides);
 }
