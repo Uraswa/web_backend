@@ -457,228 +457,28 @@ class OrdersService {
             const order = orderResult.rows[0];
             const targetOppId = order.opp_id;
 
-            // 2. Собираем информацию о товарах и группируем по продавцам
-            const productsBySeller = new Map(); // seller_id -> [{product_id, count, distribution, ...}]
+            // 2. Собираем информацию о товарах для возврата
+            const productsToReturn = [];
 
             for (const row of orderResult.rows) {
                 // Получаем текущее распределение статусов товара
                 const statusInfo = await this.getProductStatuses(row.product_id, orderId);
                 const distribution = statusInfo.data.current_distribution;
 
-                // Обрабатываем товары в статусе waiting_for_product_arrival_in_opp - возвращаем на склад
-                if (distribution.waiting_for_product_arrival_in_opp > 0) {
-                    await this._unreserveProduct(
-                        client,
-                        row.product_id,
-                        distribution.waiting_for_product_arrival_in_opp
-                    );
-
-                    // Записываем статус refunded
-                    await client.query(
-                        `INSERT INTO order_product_statuses (order_id, product_id, order_product_status, count, date, data)
-                         VALUES ($1, $2, 'refunded', $3, NOW(), $4)`,
-                        [
-                            orderId,
-                            row.product_id,
-                            distribution.waiting_for_product_arrival_in_opp,
-                            JSON.stringify(new RefundedDto(
-                                reason,
-                                'waiting_for_product_arrival_in_opp',
-                                { returnedToStock: true }
-                            ))
-                        ]
-                    );
-                }
-
-                // Для остальных товаров (at_start_opp, at_target_opp, sent_to_logistics) создаем обратные заказы
-                // Суммируем количество товаров в логистике
-                const sentToLogisticsTotal = Object.values(distribution.sent_to_logistics).reduce((sum, count) => sum + count, 0);
-                const returnableCount = distribution.at_start_opp + distribution.at_target_opp + sentToLogisticsTotal;
-
-                if (returnableCount > 0) {
-                    if (!productsBySeller.has(row.seller_id)) {
-                        productsBySeller.set(row.seller_id, []);
-                    }
-
-                    productsBySeller.get(row.seller_id).push({
-                        product_id: row.product_id,
-                        product_name: row.product_name,
-                        count: returnableCount,
-                        price: row.price,
-                        distribution: distribution
-                    });
-                }
-            }
-
-            // 3. Создаем обратные заказы для каждого продавца
-            const returnOrders = [];
-
-            for (const [sellerId, products] of productsBySeller.entries()) {
-
-                // Создаем заказ типа 'client' для продавца (сумма = 0)
-                const returnOrderResult = await client.query(
-                    `INSERT INTO orders (order_type, receiver_id, opp_id, created_date)
-                     VALUES ('client', $1, $2, NOW())
-                     RETURNING *`,
-                    [sellerId, targetOppId]
-                );
-
-                const returnOrder = returnOrderResult.rows[0];
-
-                // Добавляем товары в обратный заказ
-                for (const product of products) {
-
-                    const statusInfo = await this.getProductStatuses(product.product_id, orderId);
-                    const distribution = statusInfo.data.current_distribution;
-
-                    await client.query(
-                        `INSERT INTO order_products (order_id, product_id, ordered_count, price, opp_received_count)
-                         VALUES ($1, $2, $3, 0, 0)`,
-                        [returnOrder.order_id, product.product_id, product.count]
-                    );
-
-                    // Для товаров в at_target_opp: создаем статус arrived_in_opp с is_start_opp: true
-                    // (для обратного пути целевой ПВЗ покупателя становится стартовым ПВЗ)
-                    if (distribution.at_target_opp > 0) {
-                        await client.query(
-                            `INSERT INTO order_product_statuses (order_id, product_id, order_product_status, count, date, data)
-                             VALUES ($1, $2, 'arrived_in_opp', $3, NOW(), $4)`,
-                            [
-                                returnOrder.order_id,
-                                product.product_id,
-                                distribution.at_target_opp,
-                                JSON.stringify(new ArrivedInOppReturnOrderDto(
-                                    targetOppId,
-                                    true,  // is_start_opp
-                                    false, // is_target_opp
-                                    orderId
-                                ))
-                            ]
-                        );
-                    }
-
-                    // Для товаров в at_start_opp: создаем статус arrived_in_opp с is_target_opp: true
-                    // (для продавца исходный ПВЗ становится целевым ПВЗ для возврата)
-                    if (distribution.at_start_opp > 0) {
-                        await client.query(
-                            `INSERT INTO order_product_statuses (order_id, product_id, order_product_status, count, date, data)
-                             VALUES ($1, $2, 'arrived_in_opp', $3, NOW(), $4)`,
-                            [
-                                returnOrder.order_id,
-                                product.product_id,
-                                distribution.at_start_opp,
-                                JSON.stringify(new ArrivedInOppReturnOrderDto(
-                                    null,  // opp_id - TODO: нужно получить ID исходного ПВЗ из истории статусов
-                                    false, // is_start_opp
-                                    true,  // is_target_opp
-                                    orderId
-                                ))
-                            ]
-                        );
-                    }
-
-                    // Для товаров в sent_to_logistics: создаем статусы для каждого logistics_order_id
-                    for (const [logisticsOrderId, count] of Object.entries(distribution.sent_to_logistics)) {
-                        if (count > 0) {
-                            await client.query(
-                                `INSERT INTO order_product_statuses (order_id, product_id, order_product_status, count, date, data)
-                                 VALUES ($1, $2, 'sent_to_logistics', $3, NOW(), $4)`,
-                                [
-                                    returnOrder.order_id,
-                                    product.product_id,
-                                    count,
-                                    JSON.stringify(new SentToLogisticsReturnDto(
-                                        parseInt(logisticsOrderId),
-                                        orderId
-                                    ))
-                                ]
-                            );
-                        }
-                    }
-                }
-
-                returnOrders.push({
-                    order_id: returnOrder.order_id,
-                    receiver_id: sellerId,
-                    opp_id: targetOppId,
-                    original_order_id: orderId
+                productsToReturn.push({
+                    product_id: row.product_id,
+                    product_name: row.product_name,
+                    seller_id: row.seller_id,
+                    price: row.price,
+                    distribution: distribution,
+                    order_id: orderId
                 });
             }
 
-            // 4. Планируем доставку для обратных заказов
-            if (returnOrders.length > 0) {
-                const planResult = await OuterLogisticsService.planOrderDelivery(returnOrders);
-                if (!planResult.success) {
-                    throw new Error(`Ошибка при планировании доставки: ${planResult.error}`);
-                }
-            }
+            // 3. Вызываем функцию возврата товаров
+            const returnOrders = await this.returnProducts(client, productsToReturn, reason, targetOppId);
 
-            // 5. Записываем статусы refunded для всех возвращаемых товаров
-            for (const row of orderResult.rows) {
-                const statusInfo = await this.getProductStatuses(row.product_id, orderId);
-                const distribution = statusInfo.data.current_distribution;
-
-                // at_start_opp
-                if (distribution.at_start_opp > 0) {
-                    await client.query(
-                        `INSERT INTO order_product_statuses (order_id, product_id, order_product_status, count, date, data)
-                         VALUES ($1, $2, 'refunded', $3, NOW(), $4)`,
-                        [
-                            orderId,
-                            row.product_id,
-                            distribution.at_start_opp,
-                            JSON.stringify(new RefundedDto(
-                                reason,
-                                'at_start_opp',
-                                { returnOrderCreated: true }
-                            ))
-                        ]
-                    );
-                }
-
-                // at_target_opp
-                if (distribution.at_target_opp > 0) {
-                    await client.query(
-                        `INSERT INTO order_product_statuses (order_id, product_id, order_product_status, count, date, data)
-                         VALUES ($1, $2, 'refunded', $3, NOW(), $4)`,
-                        [
-                            orderId,
-                            row.product_id,
-                            distribution.at_target_opp,
-                            JSON.stringify(new RefundedDto(
-                                reason,
-                                'at_target_opp',
-                                { returnOrderCreated: true }
-                            ))
-                        ]
-                    );
-                }
-
-                // sent_to_logistics - обрабатываем каждый logistics_order_id отдельно
-                for (const [logisticsOrderId, count] of Object.entries(distribution.sent_to_logistics)) {
-                    if (count > 0) {
-                        await client.query(
-                            `INSERT INTO order_product_statuses (order_id, product_id, order_product_status, count, date, data)
-                             VALUES ($1, $2, 'refunded', $3, NOW(), $4)`,
-                            [
-                                orderId,
-                                row.product_id,
-                                count,
-                                JSON.stringify(new RefundedDto(
-                                    reason,
-                                    'sent_to_logistics',
-                                    {
-                                        returnOrderCreated: true,
-                                        fromLogisticsOrderId: parseInt(logisticsOrderId)
-                                    }
-                                ))
-                            ]
-                        );
-                    }
-                }
-            }
-
-            // 6. Меняем статус заказа на canceled
+            // 4. Меняем статус заказа на canceled
             await client.query(
                 `INSERT INTO order_statuses (order_id, status, data, date)
                  VALUES ($1, 'canceled', $2, NOW())`,
@@ -724,6 +524,239 @@ class OrdersService {
              WHERE product_id = $2`,
             [count, productId]
         );
+    }
+
+    /**
+     * Возврат товаров продавцам
+     * @param {Object} client - Транзакция БД
+     * @param {Array} products - Массив товаров для возврата [{product_id, count, seller_id, distribution, price, product_name, order_id}]
+     * @param {string} reason - Причина возврата
+     * @param {number} targetOppId - ID целевого ПВЗ
+     * @returns {Promise<Array>} Массив созданных обратных заказов
+     */
+    async returnProducts(client, products, reason, targetOppId) {
+        // 1. Обрабатываем товары в статусе waiting_for_product_arrival_in_opp
+        for (const product of products) {
+            if (product.distribution.waiting_for_product_arrival_in_opp > 0) {
+                // Возвращаем на склад
+                await this._unreserveProduct(
+                    client,
+                    product.product_id,
+                    product.distribution.waiting_for_product_arrival_in_opp
+                );
+
+                // Записываем статус refunded
+                await client.query(
+                    `INSERT INTO order_product_statuses (order_id, product_id, order_product_status, count, date, data)
+                     VALUES ($1, $2, 'refunded', $3, NOW(), $4)`,
+                    [
+                        product.order_id,
+                        product.product_id,
+                        product.distribution.waiting_for_product_arrival_in_opp,
+                        JSON.stringify(new RefundedDto(
+                            reason,
+                            'waiting_for_product_arrival_in_opp',
+                            { returnedToStock: true }
+                        ))
+                    ]
+                );
+            }
+        }
+
+        // 2. Группируем товары по продавцам для создания обратных заказов
+        const productsBySeller = new Map(); // seller_id -> [{product_id, count, distribution, ...}]
+
+        for (const product of products) {
+            // Суммируем количество товаров в логистике
+            const sentToLogisticsTotal = Object.values(product.distribution.sent_to_logistics).reduce((sum, count) => sum + count, 0);
+            const returnableCount = product.distribution.at_start_opp + product.distribution.at_target_opp + sentToLogisticsTotal;
+
+            if (returnableCount > 0) {
+                if (!productsBySeller.has(product.seller_id)) {
+                    productsBySeller.set(product.seller_id, []);
+                }
+
+                productsBySeller.get(product.seller_id).push({
+                    ...product,
+                    returnableCount
+                });
+            }
+        }
+
+        // 3. Создаем обратные заказы для каждого продавца
+        const returnOrders = [];
+
+        for (const [sellerId, sellerProducts] of productsBySeller.entries()) {
+            // Создаем заказ типа 'client' для продавца (сумма = 0)
+            const returnOrderResult = await client.query(
+                `INSERT INTO orders (order_type, receiver_id, opp_id, created_date)
+                 VALUES ('client', $1, $2, NOW())
+                 RETURNING *`,
+                [sellerId, targetOppId]
+            );
+
+            const returnOrder = returnOrderResult.rows[0];
+
+            // Добавляем товары в обратный заказ
+            for (const product of sellerProducts) {
+                await client.query(
+                    `INSERT INTO order_products (order_id, product_id, ordered_count, price, opp_received_count)
+                     VALUES ($1, $2, $3, 0, 0)`,
+                    [returnOrder.order_id, product.product_id, product.returnableCount]
+                );
+
+                // Для товаров в at_target_opp: создаем статус arrived_in_opp с is_start_opp: true
+                if (product.distribution.at_target_opp > 0) {
+                    await client.query(
+                        `INSERT INTO order_product_statuses (order_id, product_id, order_product_status, count, date, data)
+                         VALUES ($1, $2, 'arrived_in_opp', $3, NOW(), $4)`,
+                        [
+                            returnOrder.order_id,
+                            product.product_id,
+                            product.distribution.at_target_opp,
+                            JSON.stringify(new ArrivedInOppReturnOrderDto(
+                                targetOppId,
+                                true,  // is_start_opp
+                                false, // is_target_opp
+                                product.order_id
+                            ))
+                        ]
+                    );
+                }
+
+                // Для товаров в at_start_opp: создаем статус arrived_in_opp с is_target_opp: true
+                if (product.distribution.at_start_opp > 0) {
+
+                    let targetopp_id = -1;
+                    if (Object.keys(product.distribution.by_opp).length !== 0) {
+                        //TODO КОСТЫЛЬ. НЕ ЧАСТАЯ СИТУАЦИЯ, КОГДА ПРОДАВЕЦ ОТПРАВИЛ ОДИН И ТОТ ЖЕ ТОВАР ИЗ НЕСКОЛЬКИХ РАЗНЫХ ПВЗ
+                        // ТАКОЙ СЛУЧАЙ ПОКА ЧТО НЕ РЕАЛИЗОВАН, ТАК КАК У ЗАКАЗА ЕСТЬ TARGET_OPP ПРЯМО В БД.
+                        // ПОЭТОМУ КОСТЫЛЮ TARGET_OPP НА ПЕРВЫЙ ПВЗ ИЗ СПИСКА
+                        targetopp_id = Object.keys(product.distribution.by_opp)[0]
+                    }
+
+                    for (let start_opp_id in product.distribution.by_opp) {
+                        await client.query(
+                        `INSERT INTO order_product_statuses (order_id, product_id, order_product_status, count, date, data)
+                         VALUES ($1, $2, 'arrived_in_opp', $3, NOW(), $4)`,
+                        [
+                            returnOrder.order_id,
+                            product.product_id,
+                            product.distribution.by_opp[start_opp_id],
+                            JSON.stringify(new ArrivedInOppReturnOrderDto(
+                                start_opp_id,  // opp_id
+                                false, // is_start_opp
+                                targetopp_id === start_opp_id,  // is_target_opp
+                                product.order_id
+                            ))
+                        ]
+                    );
+                    }
+
+
+                }
+
+                // Для товаров в sent_to_logistics: создаем статусы для каждого logistics_order_id
+                for (const [logisticsOrderId, count] of Object.entries(product.distribution.sent_to_logistics)) {
+                    if (count > 0) {
+                        await client.query(
+                            `INSERT INTO order_product_statuses (order_id, product_id, order_product_status, count, date, data)
+                             VALUES ($1, $2, 'sent_to_logistics', $3, NOW(), $4)`,
+                            [
+                                returnOrder.order_id,
+                                product.product_id,
+                                count,
+                                JSON.stringify(new SentToLogisticsReturnDto(
+                                    parseInt(logisticsOrderId),
+                                    product.order_id
+                                ))
+                            ]
+                        );
+                    }
+                }
+            }
+
+            returnOrders.push({
+                order_id: returnOrder.order_id,
+                receiver_id: sellerId,
+                opp_id: targetOppId,
+                original_order_id: sellerProducts[0].order_id
+            });
+        }
+
+        // 4. Планируем доставку для обратных заказов
+        if (returnOrders.length > 0) {
+            const planResult = await OuterLogisticsService.planOrderDelivery(returnOrders);
+            if (!planResult.success) {
+                throw new Error(`Ошибка при планировании доставки: ${planResult.error}`);
+            }
+        }
+
+        // 5. Записываем статусы refunded для всех возвращаемых товаров
+        for (const product of products) {
+            const distribution = product.distribution;
+
+            // at_start_opp
+            if (distribution.at_start_opp > 0) {
+                await client.query(
+                    `INSERT INTO order_product_statuses (order_id, product_id, order_product_status, count, date, data)
+                     VALUES ($1, $2, 'refunded', $3, NOW(), $4)`,
+                    [
+                        product.order_id,
+                        product.product_id,
+                        distribution.at_start_opp,
+                        JSON.stringify(new RefundedDto(
+                            reason,
+                            'at_start_opp',
+                            { returnOrderCreated: true }
+                        ))
+                    ]
+                );
+            }
+
+            // at_target_opp
+            if (distribution.at_target_opp > 0) {
+                await client.query(
+                    `INSERT INTO order_product_statuses (order_id, product_id, order_product_status, count, date, data)
+                     VALUES ($1, $2, 'refunded', $3, NOW(), $4)`,
+                    [
+                        product.order_id,
+                        product.product_id,
+                        distribution.at_target_opp,
+                        JSON.stringify(new RefundedDto(
+                            reason,
+                            'at_target_opp',
+                            { returnOrderCreated: true }
+                        ))
+                    ]
+                );
+            }
+
+            // sent_to_logistics - обрабатываем каждый logistics_order_id отдельно
+            for (const [logisticsOrderId, count] of Object.entries(distribution.sent_to_logistics)) {
+                if (count > 0) {
+                    await client.query(
+                        `INSERT INTO order_product_statuses (order_id, product_id, order_product_status, count, date, data)
+                         VALUES ($1, $2, 'refunded', $3, NOW(), $4)`,
+                        [
+                            product.order_id,
+                            product.product_id,
+                            count,
+                            JSON.stringify(new RefundedDto(
+                                reason,
+                                'sent_to_logistics',
+                                {
+                                    returnOrderCreated: true,
+                                    fromLogisticsOrderId: parseInt(logisticsOrderId)
+                                }
+                            ))
+                        ]
+                    );
+                }
+            }
+        }
+
+        return returnOrders;
     }
 
     /**
@@ -852,9 +885,10 @@ class OrdersService {
      * Выдача заказа покупателю из ПВЗ
      * @param {number} orderId - ID заказа
      * @param {number} oppId - ID ПВЗ, откуда выдается заказ
+     * @param {Array} rejectedProducts - Массив отклоненных товаров [{product_id, count}]
      * @returns {Promise<Object>} Результат операции
      */
-    async deliverOrder(orderId, oppId) {
+    async deliverOrder(orderId, oppId, rejectedProducts = []) {
         const client = await Database.GetMasterClient();
 
         try {
@@ -880,11 +914,12 @@ class OrdersService {
                 throw new Error(`Заказ можно выдать только из целевого ПВЗ ${targetOppId}`);
             }
 
-            // Получаем все товары заказа
+            // Получаем все товары заказа с информацией о продавцах
             const productsResult = await client.query(
-                `SELECT op.product_id, op.ordered_count, p.name as product_name
+                `SELECT op.product_id, op.ordered_count, op.price, p.name as product_name, s.owner_id as seller_id
                  FROM order_products op
                  JOIN products p ON op.product_id = p.product_id
+                 JOIN shops s ON p.shop_id = s.shop_id
                  WHERE op.order_id = $1`,
                 [orderId]
             );
@@ -893,9 +928,17 @@ class OrdersService {
                 throw new Error('Товары в заказе не найдены');
             }
 
+            // Создаем карту отклоненных товаров для быстрого доступа
+            const rejectedMap = new Map();
+            for (const rejected of rejectedProducts) {
+                rejectedMap.set(rejected.product_id, rejected.count);
+            }
+
             let totalDelivered = 0;
+            let totalRejected = 0;
             let totalOrdered = 0;
             let allProductsInTargetOpp = true;
+            const productsToReturn = [];
 
             // Обрабатываем каждый товар
             for (const product of productsResult.rows) {
@@ -908,20 +951,55 @@ class OrdersService {
                 // Проверяем, сколько товара в целевом ПВЗ
                 const countInTargetOpp = distribution.by_opp[targetOppId] || 0;
 
-                if (countInTargetOpp > 0) {
-                    // Добавляем статус delivered для товаров в целевом ПВЗ
+                // Проверяем, отклонен ли этот товар
+                const rejectedCount = rejectedMap.get(product.product_id) || 0;
+
+                if (rejectedCount > 0) {
+                    // Проверяем, что отклоняемое количество не превышает доступное
+                    if (rejectedCount > countInTargetOpp) {
+                        throw new Error(
+                            `Нельзя отклонить ${rejectedCount} шт. товара ${product.product_name}. ` +
+                            `В целевом ПВЗ доступно только ${countInTargetOpp} шт.`
+                        );
+                    }
+
+                    // Добавляем товар в список для возврата
+                    productsToReturn.push({
+                        product_id: product.product_id,
+                        product_name: product.product_name,
+                        seller_id: product.seller_id,
+                        price: product.price,
+                        distribution: {
+                            ...distribution,
+                            // Для возврата используем только количество в целевом ПВЗ
+                            at_target_opp: rejectedCount,
+                            at_start_opp: 0,
+                            sent_to_logistics: {},
+                            waiting_for_product_arrival_in_opp: 0
+                        },
+                        order_id: orderId
+                    });
+
+                    totalRejected += rejectedCount;
+                }
+
+                // Выдаем оставшиеся товары (не отклоненные)
+                const countToDeliver = countInTargetOpp - rejectedCount;
+
+                if (countToDeliver > 0) {
+                    // Добавляем статус delivered для выданных товаров
                     await client.query(
                         `INSERT INTO order_product_statuses (order_id, product_id, order_product_status, count, date, data)
                          VALUES ($1, $2, 'delivered', $3, NOW(), $4)`,
                         [
                             orderId,
                             product.product_id,
-                            countInTargetOpp,
+                            countToDeliver,
                             JSON.stringify(new DeliveredDto(targetOppId))
                         ]
                     );
 
-                    totalDelivered += countInTargetOpp;
+                    totalDelivered += countToDeliver;
                 }
 
                 // Проверяем, все ли товары этого типа были в целевом ПВЗ
@@ -930,12 +1008,24 @@ class OrdersService {
                 }
             }
 
-            if (totalDelivered === 0) {
+            // Обрабатываем возврат отклоненных товаров
+            let returnOrders = [];
+            if (productsToReturn.length > 0) {
+                returnOrders = await this.returnProducts(
+                    client,
+                    productsToReturn,
+                    'Отклонено покупателем при получении',
+                    targetOppId
+                );
+            }
+
+            if (totalDelivered === 0 && totalRejected === 0) {
                 throw new Error('Нет товаров для выдачи в целевом ПВЗ');
             }
 
-            // Если все товары были в целевом ПВЗ, завершаем заказ
-            if (allProductsInTargetOpp && totalDelivered === totalOrdered) {
+            // Если все товары были обработаны (выданы или отклонены), завершаем заказ
+            const allProcessed = (totalDelivered + totalRejected) === totalOrdered;
+            if (allProductsInTargetOpp && allProcessed) {
                 await client.query(
                     `INSERT INTO order_statuses (order_id, status, date, data)
                      VALUES ($1, 'completed', NOW(), $2)`,
@@ -944,7 +1034,9 @@ class OrdersService {
                         JSON.stringify({
                             completed_at: new Date().toISOString(),
                             opp_id: targetOppId,
-                            all_products_delivered: true
+                            all_products_delivered: true,
+                            rejected_count: totalRejected,
+                            delivered_count: totalDelivered
                         })
                     ]
                 );
@@ -955,15 +1047,17 @@ class OrdersService {
             return {
                 success: true,
                 data: {
-                    message: allProductsInTargetOpp
+                    message: allProductsInTargetOpp && allProcessed
                         ? 'order_done'
                         : 'order_not_done',
                     order_id: orderId,
                     opp_id: oppId,
                     delivered_count: totalDelivered,
+                    rejected_count: totalRejected,
                     total_ordered: totalOrdered,
-                    is_completed: allProductsInTargetOpp && totalDelivered === totalOrdered,
-                    partial_delivery: !allProductsInTargetOpp
+                    is_completed: allProductsInTargetOpp && allProcessed,
+                    partial_delivery: !allProductsInTargetOpp,
+                    return_orders: returnOrders
                 }
             };
 
