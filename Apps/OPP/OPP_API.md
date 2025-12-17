@@ -1,119 +1,77 @@
 OPP API
 =======
 
-Документация REST‑эндпоинтов личного кабинета владельца пункта выдачи заказов (ПВЗ). Все ручки доступны только авторизованным владельцам конкретного ПВЗ.
+This document describes the owner portal endpoints that live under `/api/opp/*`.
 
-Аутентификация и авторизация
-----------------------------
-- Каждый запрос требует заголовок `Authorization: Bearer <JWT>`.
-- `oppOwnerMiddleware` проверяет, что `user_id` токена совпадает с владельцем ПВЗ (`opp.owner_id`). В противном случае возвращается `403 Access Denied`.
-- При отсутствии токена/невалидном токене возвращается `401 Unauthorized`.
+Authentication & Authorization
+------------------------------
+- Every request must contain `Authorization: Bearer <JWT>`.
+- `oppOwnerMiddleware` ensures the token user is the owner of the requested OPP (`opp.owner_id`). Otherwise `403 Access Denied`.
+- Missing/invalid token results in `401 Unauthorized`.
 
-Формат ответов
+Response Shape
 --------------
-- Успех: `{ "success": true, "data": { ... } }`
-- Ошибка: `{ "success": false, "error": "<код>" [, "meta": {...}] }`
+- Success: `{ "success": true, "data": { ... } }`
+- Failure: `{ "success": false, "error": "<error_code>", ["meta": {...}] }`
 
-Эндпоинты
+Endpoints
 ---------
 
-### 1. GET `/api/opp/:oppId/statistics`
-- Описание: агрегация по заказам конкретного ПВЗ.
-- Параметры: `oppId` — ID ПВЗ.
-- Ответ `200`:
+### GET `/api/opp/:oppId/statistics`
+- Purpose: aggregated counters for the selected OPP.
+- Query params: none.
+- 200 response:
   ```json
-  {
-    "success": true,
-    "data": {
-      "total_orders": 24,
-      "active_orders": 3,
-      "...": "доп. счётчики модели"
-    }
-  }
+  { "success": true, "data": { "total_orders": 24, "active_orders": 3, "..." : "model dependent" } }
   ```
-- Ошибки: `404` если ПВЗ не найден/не принадлежит пользователю.
+- Errors: `404` if the OPP does not exist or belongs to another owner.
 
-### 2. GET `/api/opp/:oppId/orders?status=waiting|done|canceled`
-- Описание: список заказов по ПВЗ с фильтром по статусу (по умолчанию все).
-- Ответ `200`:
+### GET `/api/opp/:oppId/orders?status=waiting|done|canceled`
+- Purpose: list of orders with optional status filter (default – all).
+- 200 response:
   ```json
-  {
-    "success": true,
-    "data": {
-      "orders": [ { "order_id": 1, "...": "поля ORM" } ],
-      "count": 1
-    }
-  }
+  { "success": true, "data": { "orders": [ { "order_id": 1, ... } ], "count": 1 } }
   ```
-- Ошибки: `401/403` как описано выше.
+- Errors: `401/403` for auth failures.
 
-### 3. GET `/api/opp/:oppId/orders/:orderId`
-- Описание: подробные данные заказа (товары, цены, статусы).
-- Ответ `200`:
-  ```json
-  { "success": true, "data": { "order_id": 1, "products": [ ... ] } }
-  ```
-- Ошибка `404` → `{ "success": false, "error": "order_not_found" }`.
+### GET `/api/opp/:oppId/orders/:orderId`
+- Purpose: detailed order with products, seller info and status history.
+- Success: `{ "success": true, "data": { "order_id": 1, "products": [ ... ] } }`
+- Error: `404` → `{ "success": false, "error": "order_not_found" }`.
 
-### 4. GET `/api/opp/:oppId/logistics-orders?direction=all|incoming|outgoing`
-- Описание: виртуальные логистические заказы для маршрутов стартовый ПВЗ → целевой ПВЗ.
-- Параметр `direction` необязателен (по умолчанию `all`).
-- Ответ `200`:
-  ```json
-  {
-    "success": true,
-    "data": {
-      "logistics_orders": [ { "logistics_order_id": 1, "source_opp_id": 5, ... } ],
-      "count": 1,
-      "direction": "outgoing"
-    }
-  }
-  ```
+### GET `/api/opp/:oppId/logistics-orders?direction=all|incoming|outgoing`
+- Purpose: inspect virtual logistics orders generated for the OPP.
+- Query `direction` defaults to `all`.
+- 200 response: `{ "success": true, "data": { "logistics_orders": [...], "count": 1, "direction": "outgoing" } }`
 
-### 5. POST `/api/opp/:oppId/receive-from-seller`
-- Назначение: регистрация поставки товара от продавца в стартовый ПВЗ.
-- Тело:
+### POST `/api/opp/:oppId/receive-from-seller`
+- Purpose: register that the start OPP received goods from the seller.
+- Body:
   ```json
   { "order_id": 1, "product_id": 11, "count": 2 }
   ```
-- Ответ `200` (успех):
-  ```json
-  {
-    "success": true,
-    "data": {
-      "message": "Товар принят в ПВЗ",
-      "order_id": 1,
-      "logistics_info": { "...": "данные planOrderDelivery" }
-    }
-  }
-  ```
-- Ошибки:
-  - `400 missing_required_fields` — если не хватает `order_id / product_id / count`.
-  - `200` с `success:false` и сообщением из `ordersService` — если товар не в заказе или количество превышает ожидание.
+- Success: returns logistics planning info from `OuterLogisticsService`.
+- Errors:
+  - `400 missing_required_fields`.
+  - Business errors with `success:false` (product not in order, exceeding waiting amount, etc.).
 
-### 6. POST `/api/opp/:oppId/give-to-logistics`
-- Назначение: передача товара логисту.
-- Тело:
+### POST `/api/opp/:oppId/give-to-logistics`
+- Purpose: hand over goods to a logistics order.
+- Body:
   ```json
   { "order_id": 1, "logistics_order_id": 7, "product_id": 11, "count": 2 }
   ```
-- Ответ `200` успех: сообщение + `logistics_order_id`.
-- Ошибки:
-  - `400 missing_required_fields` без обязательных полей.
-  - `200` с `success:false` и текстом из `ordersService` — неправильный ПВЗ, логистический заказ не найден, недостаточно товара в ПВЗ.
+- Success: confirms the transfer.
+- Errors: `400 missing_required_fields`, or business errors (wrong OPP, unknown logistics order, insufficient stock).
 
-### 7. POST `/api/opp/:oppId/receive-from-logistics`
-- Назначение: подтверждение получения товаров целевым ПВЗ из логистического заказа.
-- Тело: `{ "logistics_order_id": 7 }`.
-- Ответ `200` успех: `logistics_order_id`, `target_opp_id`, `total_items`.
-- Ошибки:
-  - `400 logistics_order_id_required`.
-  - `403` при попытке чужого владельца.
-  - `200` с `success:false` если логистический заказ не найден.
+### POST `/api/opp/:oppId/receive-from-logistics`
+- Purpose: confirm that the target OPP received products from a logistics order.
+- Body: `{ "logistics_order_id": 7 }`
+- Errors: `400 logistics_order_id_required`, `403` when another owner tries to act, or `success:false` when logistics order is unknown.
 
-### 8. POST `/api/opp/:oppId/deliver`
-- Назначение: выдача заказа клиенту в целевом ПВЗ, с возможностью отклонить позиции.
-- Тело:
+### POST `/api/opp/:oppId/deliver`
+- Purpose: deliver the order to the buyer at the target OPP, optionally rejecting items.
+- Body:
   ```json
   {
     "order_id": 1,
@@ -122,22 +80,23 @@ OPP API
     ]
   }
   ```
-- Правила:
-  - `order_id` обязателен (`400 order_id_required`).
-  - `rejected_products` валидируются: обязательны `product_id` и `count > 0`; суммарное отклоняемое количество не может превышать оставшихся единиц товара в заказе. При нарушении возвращается `400 rejected_count_exceeds_available`.
-  - Выдавать можно только из целевого ПВЗ (`success:false` с текстом `ordersService`).
-- Успешный ответ `200` содержит `delivered_count`, `rejected_count`, `is_completed`, `return_orders`.
+- Rules:
+  - `order_id` is mandatory (`400 order_id_required`).
+  - Each rejected item must have `product_id` and `count > 0`.
+  - The API validates that the total rejected count per product does not exceed the remaining quantity in the order. Violations yield `400 rejected_count_exceeds_available` with `meta.product_id`, `requested`, `available`.
+  - Orders can be delivered only from their target OPP (error text propagated from `ordersService`).
+- Success response contains `delivered_count`, `rejected_count`, `is_completed`, `return_orders`.
 
-Типовые ошибки
---------------
-- `401 Unauthorized` — нет токена или он невалиден.
-- `403 Access Denied` — пользователь не владелец ПВЗ.
-- `404` — запрашиваемый `oppId`/`orderId` отсутствует либо принадлежит другому владельцу.
+Common Errors
+-------------
+- `401 Unauthorized` – missing or invalid token.
+- `403 Access Denied` – user is not the owner of the OPP.
+- `404` – OPP/order not found or not owned by the user.
 
-Тесты
+Tests
 -----
-Для автоматической проверки всех сценариев:
+Run the full suite to cover every endpoint and negative path:
 ```bash
 npm test -- Apps/OPP/Tests/OppController.test.js
 ```
-Сьют поднимает Express‑сервер, заполняет БД тестовыми данными и покрывает все описанные выше эндпоинты, включая негативные кейсы.
+The tests start the Express app, reseed the database, run through receive/give/logistics/deliver flows, and ensure the API contract described above.
