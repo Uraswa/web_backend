@@ -1,3 +1,11 @@
-﻿export default (router) => {
+import authMiddleware from "../../Core/Middleware/authMiddleware.js";
+import adminMiddleware from "../../Core/Middleware/adminMiddleware.js";
+import ShopController from "./Controller/ShopController.js";
 
+export default (router) => {
+    // Магазины (админ)
+    router.get('/api/admin/shops', authMiddleware, adminMiddleware, ShopController.listShops);
+    router.post('/api/admin/shops', authMiddleware, adminMiddleware, ShopController.createShop);
+    router.delete('/api/admin/shops/:shopId', authMiddleware, adminMiddleware, ShopController.deleteShop);
+    router.put('/api/admin/shops/:shopId', authMiddleware, adminMiddleware, ShopController.updateShop);
 }
