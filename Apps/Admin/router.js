@@ -1,5 +1,5 @@
 import authMiddleware from "../../Core/Middleware/authMiddleware.js";
-import adminMiddleware from "../../Core/Middleware/adminMiddleware.js";
+import adminMiddleware from "./Middleware/adminMiddleware.js";
 import ShopController from "./Controller/ShopController.js";
 
 export default (router) => {

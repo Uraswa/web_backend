@@ -1,27 +1,27 @@
-    import CarouselModel from "../Model/CarouselModel.js";
+import CarouselModel from "../Model/CarouselModel.js";
 
-    class CarouselController {
+class CarouselController {
 
-        // Получение слайдов
-        async getSlides(req, res) {
-            try {
-                const limitParam = parseInt(req.query.limit, 10);
-                const limit = Number.isInteger(limitParam) && limitParam > 0 ? limitParam : 3;
+    // Получение слайдов
+    async getSlides(req, res) {
+        try {
+            const limitParam = parseInt(req.query.limit, 10);
+            const limit = Number.isInteger(limitParam) && limitParam > 0 ? limitParam : 3;
 
-                const slides = await CarouselModel.getSlides(limit);
+            const slides = await CarouselModel.getSlides(limit);
 
-                return res.status(200).json({
-                    success: true,
-                    data: slides
-                });
-            } catch (error) {
-                console.error(error);
-                return res.status(500).json({
-                    success: false,
-                    error: "Ошибка при получении слайдов"
-                });
-            }
+            return res.status(200).json({
+                success: true,
+                data: slides
+            });
+        } catch (error) {
+            console.error(error);
+            return res.status(500).json({
+                success: false,
+                error: "Ошибка при получении слайдов"
+            });
         }
     }
+}
 
-    export default new CarouselController();
+export default new CarouselController();

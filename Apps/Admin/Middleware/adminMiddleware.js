@@ -1,4 +1,4 @@
-import BasicUserModel from "../Model/BasicUserModel.js";
+import BasicUserModel from "../../../Core/Model/BasicUserModel.js";
 
 const userModel = new BasicUserModel();
 
