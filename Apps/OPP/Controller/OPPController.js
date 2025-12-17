@@ -1,5 +1,89 @@
 import OPPModel from '../Model/OPPModel.js';
 import ordersService from '../../../Core/Services/ordersService.js';
+import { Database } from '../../../Core/Model/Database.js';
+
+async function getProductRemainingCount(orderId, productId) {
+  const productResult = await Database.query(
+    `SELECT ordered_count
+     FROM order_products
+     WHERE order_id = $1 AND product_id = $2`,
+    [orderId, productId]
+  );
+
+  if (productResult.rows.length === 0) {
+    return 0;
+  }
+
+  const orderedCount = Number(productResult.rows[0].ordered_count);
+
+  const deliveredResult = await Database.query(
+    `SELECT COALESCE(SUM(count), 0) AS delivered
+     FROM order_product_statuses
+     WHERE order_id = $1 AND product_id = $2 AND order_product_status = 'delivered'`,
+    [orderId, productId]
+  );
+
+  const refundedResult = await Database.query(
+    `SELECT COALESCE(SUM(count), 0) AS refunded
+     FROM order_product_statuses
+     WHERE order_id = $1 AND product_id = $2 AND order_product_status = 'refunded'`,
+    [orderId, productId]
+  );
+
+  const remaining = orderedCount
+    - Number(deliveredResult.rows[0].delivered || 0)
+    - Number(refundedResult.rows[0].refunded || 0);
+
+  return Math.max(0, remaining);
+}
+
+async function validateRejectedProductsRequest(orderId, oppId, rejectedProducts = []) {
+  if (!Array.isArray(rejectedProducts) || rejectedProducts.length === 0) {
+    return { valid: true };
+  }
+
+  const usageMap = new Map();
+  const remainingCache = new Map();
+
+  for (const product of rejectedProducts) {
+    if (!product || typeof product.product_id === 'undefined' || typeof product.count === 'undefined') {
+      return { valid: false, status: 400, error: 'invalid_rejected_product' };
+    }
+
+    const productId = Number(product.product_id);
+    const count = Number(product.count);
+
+    if (!Number.isInteger(productId) || !Number.isInteger(count) || count <= 0) {
+      return { valid: false, status: 400, error: 'invalid_rejected_product' };
+    }
+
+    if (!remainingCache.has(productId)) {
+      const remaining = await getProductRemainingCount(orderId, productId);
+      remainingCache.set(productId, remaining);
+    }
+
+    const available = remainingCache.get(productId);
+    const alreadyRequested = usageMap.get(productId) || 0;
+    const totalRequested = alreadyRequested + count;
+
+    if (totalRequested > available) {
+      return {
+        valid: false,
+        status: 400,
+        error: 'rejected_count_exceeds_available',
+        meta: {
+          product_id: productId,
+          requested: totalRequested,
+          available
+        }
+      };
+    }
+
+    usageMap.set(productId, totalRequested);
+  }
+
+  return { valid: true };
+}
 
 class OPPController {
 
@@ -94,6 +178,18 @@ class OPPController {
           success: false,
           error: 'order_id_required'
         });
+      }
+
+      if (Array.isArray(rejected_products) && rejected_products.length > 0) {
+        const validation = await validateRejectedProductsRequest(order_id, oppId, rejected_products);
+
+        if (!validation.valid) {
+          return res.status(validation.status || 400).json({
+            success: false,
+            error: validation.error,
+            ...(validation.meta ? { meta: validation.meta } : {})
+          });
+        }
       }
 
       // Вызвать метод из ordersService
