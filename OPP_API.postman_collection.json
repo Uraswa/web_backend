@@ -1,0 +1,352 @@
+{
+  "info": {
+    "name": "OPP API - ЛК Владельца ПВЗ",
+    "description": "API для управления ПВЗ (пунктом выдачи заказов)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8000",
+      "type": "string"
+    },
+    {
+      "key": "accessToken",
+      "value": "YOUR_ACCESS_TOKEN_HERE",
+      "type": "string"
+    },
+    {
+      "key": "oppId",
+      "value": "10",
+      "type": "string"
+    },
+    {
+      "key": "orderId",
+      "value": "123",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"your_email@example.com\",\n  \"password\": \"your_password\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "login"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "OPP - Информация",
+      "item": [
+        {
+          "name": "Получить статистику ПВЗ",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/opp/{{oppId}}/statistics",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "opp", "{{oppId}}", "statistics"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "OPP - Заказы",
+      "item": [
+        {
+          "name": "Получить список заказов",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/opp/{{oppId}}/orders",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "opp", "{{oppId}}", "orders"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Получить список заказов (с фильтром)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/opp/{{oppId}}/orders?status=waiting",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "opp", "{{oppId}}", "orders"],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "waiting"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Получить детали заказа",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/opp/{{oppId}}/orders/{{orderId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "opp", "{{oppId}}", "orders", "{{orderId}}"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "OPP - Логистика",
+      "item": [
+        {
+          "name": "Получить логистические заказы (все)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/opp/{{oppId}}/logistics-orders",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "opp", "{{oppId}}", "logistics-orders"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Получить входящие логистические заказы",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/opp/{{oppId}}/logistics-orders?direction=incoming",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "opp", "{{oppId}}", "logistics-orders"],
+              "query": [
+                {
+                  "key": "direction",
+                  "value": "incoming"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Получить исходящие логистические заказы",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/opp/{{oppId}}/logistics-orders?direction=outgoing",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "opp", "{{oppId}}", "logistics-orders"],
+              "query": [
+                {
+                  "key": "direction",
+                  "value": "outgoing"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "OPP - Операции",
+      "item": [
+        {
+          "name": "Принять товар от продавца",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"order_id\": 123,\n  \"product_id\": 100,\n  \"count\": 5\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/opp/{{oppId}}/receive-from-seller",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "opp", "{{oppId}}", "receive-from-seller"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Передать товар логисту",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"order_id\": 123,\n  \"logistics_order_id\": 5,\n  \"product_id\": 100,\n  \"count\": 2\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/opp/{{oppId}}/give-to-logistics",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "opp", "{{oppId}}", "give-to-logistics"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Принять товар от логиста",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"logistics_order_id\": 5\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/opp/{{oppId}}/receive-from-logistics",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "opp", "{{oppId}}", "receive-from-logistics"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Выдать заказ клиенту (без отказов)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"order_id\": 123,\n  \"rejected_products\": []\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/opp/{{oppId}}/deliver",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "opp", "{{oppId}}", "deliver"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Выдать заказ клиенту (с отказом от товаров)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"order_id\": 123,\n  \"rejected_products\": [\n    {\"product_id\": 100, \"count\": 1}\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/opp/{{oppId}}/deliver",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "opp", "{{oppId}}", "deliver"]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
