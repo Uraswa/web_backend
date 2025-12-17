@@ -2,42 +2,44 @@
 import FeedbackController from './Controller/FeedbackController.js';
 import CartController from './Controller/CartController.js';
 import OrderController from './Controller/OrderController.js';
+import authMiddleware from "../../Core/Middleware/authMiddleware.js";
+import CategoryController from "./Controller/CategoryController.js";
 import CarouselController from './Controller/CarouselController.js';
 
 export default (router) => {
 
 
 // Главная страница
-    router.get('/products/popular', ProductController.getPopularProducts);
+    router.get('/api/products/popular', ProductController.getPopularProducts);
 
 // Поиск товаров (страница результатов поиска)
-    router.get('/products/search', ProductController.searchProducts);
+    router.get('/api/products/search', ProductController.searchProducts);
 
 // Товары по категории
-    router.get('/products/category/:categoryId', ProductController.getProductsByCategory);
+    router.get('/api/products/category/:categoryId', ProductController.getProductsByCategory);
 
 // Страница товара
-    router.get('/products/:id', ProductController.getProductById);
+    router.get('/api/products/:id', ProductController.getProductById);
 
 // Отзывы
-    router.post('/products/:productId/feedback', FeedbackController.addFeedback);
-    router.delete('/products/:productId/feedback', FeedbackController.deleteFeedback);
-    router.get('/user/feedback', FeedbackController.getUserFeedback);
+    router.post('/api/products/:productId/feedback', authMiddleware, FeedbackController.addFeedback);
+    router.delete('/api/products/:productId/feedback', authMiddleware, FeedbackController.deleteFeedback);
+    router.get('/api/user/feedback', authMiddleware, FeedbackController.getUserFeedback);
 
-// Корзина
     // Корзина
-    router.get('/cart', CartController.getCart);
-    router.get('/cart/info', CartController.getCartInfo);
-    router.post('/cart/add/:productId', CartController.addToCart);
-    router.put('/cart/update/:productId', CartController.updateCartItem);
-    router.delete('/cart/remove/:productId', CartController.removeFromCart);
-    router.delete('/cart/clear', CartController.clearCart);
+    router.get('/api/cart', authMiddleware, CartController.getCart);
+    router.get('/api/cart/info', authMiddleware, CartController.getCartInfo);
+    router.put('/api/cart/update/:productId', authMiddleware, CartController.updateCart);
+    router.delete('/api/cart/clear', authMiddleware, CartController.clearCart);
 
 // Заказы
-    router.post('/orders/create', OrderController.createOrder);
-    router.get('/orders', OrderController.getUserOrders);
-    router.get('/orders/:orderId', OrderController.getOrderDetails);
-    router.get('/orders/success/:orderId', OrderController.orderSuccess);
+    router.post('/api/orders/create', authMiddleware, OrderController.createOrder);
+    router.get('/api/orders', authMiddleware, OrderController.getUserOrders);
+    router.get('/api/orders/:orderId', authMiddleware, OrderController.getOrderDetails);
+    router.get('/api/orders/success/:orderId', authMiddleware, OrderController.orderSuccess);
+
+//Категории
+    router.get('/api/categories/getFilters', CategoryController.getFilters);
 
 // Рекламная карусель
     router.get('/carousel/slides', CarouselController.getSlides);

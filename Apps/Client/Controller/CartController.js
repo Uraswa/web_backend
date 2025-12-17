@@ -1,4 +1,5 @@
 ﻿import CartService from "../../../Core/Services/cartService.js";
+import ProductModel from "../Model/ProductModel.js";
 
 class CartController {
 
@@ -6,13 +7,6 @@ class CartController {
     async getCart(req, res) {
         try {
             const user = req.user;
-
-            if (!user) {
-                return res.status(401).json({
-                    success: false,
-                    error: 'Требуется авторизация'
-                });
-            }
 
             const cart = await CartService.getCartWithDetails(user.user_id);
 
@@ -29,119 +23,31 @@ class CartController {
         }
     }
 
-    // Добавление в корзину
-    async addToCart(req, res) {
+    async updateCart(req, res) {
         try {
             const user = req.user;
-            const { productId } = req.params;
-            const { quantity = 1 } = req.body;
+            const {productId} = req.params;
+            const {quantity = 1} = req.body;
 
-            if (!user) {
-                return res.status(401).json({
-                    success: false,
-                    error: 'Требуется авторизация'
-                });
-            }
-
-            const cart = await CartService.addToCart(user.user_id, productId, parseInt(quantity));
-
-            return res.status(200).json({
-                success: true,
-                data: cart
-            });
-        } catch (error) {
-            console.error(error);
-
-            if (error.message === 'Товар не найден') {
+            const product = await ProductModel.findById(productId);
+            if (!product) {
                 return res.status(404).json({
                     success: false,
-                    error: error.message
-                });
-            }
-
-            res.status(500).json({
-                success: false,
-                error: 'Ошибка при добавлении в корзину'
-            });
-        }
-    }
-
-    // Обновление количества товара в корзине
-    async updateCartItem(req, res) {
-        try {
-            const user = req.user;
-            const { productId } = req.params;
-            const { quantity } = req.body;
-
-            if (!user) {
-                return res.status(401).json({
-                    success: false,
-                    error: 'Требуется авторизация'
-                });
-            }
-
-            if (!quantity || quantity < 0) {
-                return res.status(400).json({
-                    success: false,
-                    error: 'Количество должно быть не менее 0'
+                    error: "product_not_found"
                 });
             }
 
             const cart = await CartService.updateCartItem(user.user_id, productId, parseInt(quantity));
-
             return res.status(200).json({
                 success: true,
                 data: cart
             });
-        } catch (error) {
-            console.error(error);
 
-            if (error.message === 'Корзина не найдена' || error.message === 'Товар не найден в корзине') {
-                return res.status(404).json({
-                    success: false,
-                    error: error.message
-                });
-            }
 
+        } catch (e) {
             res.status(500).json({
                 success: false,
-                error: 'Ошибка при обновлении корзины'
-            });
-        }
-    }
-
-    // Удаление из корзины
-    async removeFromCart(req, res) {
-        try {
-            const user = req.user;
-            const { productId } = req.params;
-
-            if (!user) {
-                return res.status(401).json({
-                    success: false,
-                    error: 'Требуется авторизация'
-                });
-            }
-
-            const cart = await CartService.removeFromCart(user.user_id, productId);
-
-            return res.status(200).json({
-                success: true,
-                data: cart
-            });
-        } catch (error) {
-            console.error(error);
-
-            if (error.message === 'Корзина не найдена' || error.message === 'Товар не найден в корзине') {
-                return res.status(404).json({
-                    success: false,
-                    error: error.message
-                });
-            }
-
-            res.status(500).json({
-                success: false,
-                error: 'Ошибка при удалении из корзины'
+                error: 'Ошибка при изменении корзины'
             });
         }
     }
@@ -151,13 +57,6 @@ class CartController {
         try {
             const user = req.user;
 
-            if (!user) {
-                return res.status(401).json({
-                    success: false,
-                    error: 'Требуется авторизация'
-                });
-            }
-
             const result = await CartService.clearCart(user.user_id);
 
             return res.status(200).json({
@@ -166,13 +65,6 @@ class CartController {
             });
         } catch (error) {
             console.error(error);
-
-            if (error.message === 'Корзина не найдена') {
-                return res.status(404).json({
-                    success: false,
-                    error: error.message
-                });
-            }
 
             res.status(500).json({
                 success: false,
@@ -185,13 +77,6 @@ class CartController {
     async getCartInfo(req, res) {
         try {
             const user = req.user;
-
-            if (!user) {
-                return res.status(401).json({
-                    success: false,
-                    error: 'Требуется авторизация'
-                });
-            }
 
             const cartInfo = await CartService.getCartInfo(user.user_id);
 

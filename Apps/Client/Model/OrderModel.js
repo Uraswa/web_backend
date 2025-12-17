@@ -42,9 +42,6 @@ class OrderModel extends BasicOrderModel {
             `;
             await client.query(statusQuery, [order.order_id]);
 
-            // Очищаем корзину
-            await client.query('DELETE FROM user_cart WHERE user_id = $1', [userId]);
-
             await client.query('COMMIT');
             return await this.findById(order.order_id);
         } catch (error) {

@@ -1,4 +1,5 @@
 ﻿import FeedbackModel from "../Model/FeedbackModel.js";
+import ProductModel from "../Model/ProductModel.js";
 
 class FeedbackController {
 
@@ -9,17 +10,18 @@ class FeedbackController {
             const { productId } = req.params;
             const { rate, good_text, bad_text, comment } = req.body;
 
-            if (!user) {
-                return res.status(401).json({
-                    success: false,
-                    error: 'Требуется авторизация'
-                });
-            }
-
             if (!rate || rate < 1 || rate > 5) {
                 return res.status(400).json({
                     success: false,
-                    error: 'Рейтинг должен быть от 1 до 5'
+                    error: 'unvalid_rate',
+                    error_field: "rate"
+                });
+            }
+
+            if (!await ProductModel.findById(productId)) {
+                return res.status(404).json({
+                    success: false,
+                    error: 'product_not_found'
                 });
             }
 
@@ -50,7 +52,9 @@ class FeedbackController {
                 data: feedback
             });
         } catch (error) {
-            console.error(error);
+            const { productId } = req.params;
+            const { rate, good_text, bad_text, comment } = req.body;
+            console.error(error, productId,rate, good_text, bad_text, comment );
             res.status(500).json({
                 success: false,
                 error: 'Ошибка при добавлении отзыва'
@@ -64,19 +68,12 @@ class FeedbackController {
             const user = req.user;
             const { productId } = req.params;
 
-            if (!user) {
-                return res.status(401).json({
-                    success: false,
-                    error: 'Требуется авторизация'
-                });
-            }
-
             const deleted = await FeedbackModel.delete(user.user_id, productId);
 
             if (!deleted) {
                 return res.status(404).json({
                     success: false,
-                    error: 'Отзыв не найден'
+                    error: 'feedback_not_found'
                 });
             }
 
@@ -97,13 +94,6 @@ class FeedbackController {
     async getUserFeedback(req, res) {
         try {
             const user = req.user;
-
-            if (!user) {
-                return res.status(401).json({
-                    success: false,
-                    error: 'Требуется авторизация'
-                });
-            }
 
             const feedback = await FeedbackModel.findByUserId(user.user_id);
 

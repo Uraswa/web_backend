@@ -26,12 +26,12 @@ class ProductController {
     async getProductById(req, res) {
         try {
             const { id } = req.params;
-            const product = await ProductModel.findById(id);
+            const product = await ProductModel.findByIdWithVariants(id);
 
             if (!product) {
                 return res.status(404).json({
                     success: false,
-                    error: 'Товар не найден'
+                    error: 'not_found'
                 });
             }
 
@@ -71,6 +71,13 @@ class ProductController {
                 limit = 20
             } = req.query;
 
+            let {char_filters} = req.query;
+            if (char_filters) {
+                char_filters = JSON.parse(char_filters)
+            } else {
+                char_filters = [];
+            }
+
             const filters = {
                 search,
                 category_id: category_id ? parseInt(category_id) : undefined,
@@ -78,7 +85,8 @@ class ProductController {
                 min_price: min_price ? parseFloat(min_price) : undefined,
                 max_price: max_price ? parseFloat(max_price) : undefined,
                 order_by,
-                order_direction
+                order_direction,
+                char_filters
             };
 
             const offset = (page - 1) * limit;
