@@ -6,7 +6,7 @@ class ProductModel extends BasicProductModel {
         super();
     }
 
-    async _getFindWithFiltersRequest(filters = {}){
+    _getFindWithFiltersRequest(filters = {}){
         let query = `
             SELECT p.*, pc.name as category_name, s.name as shop_name
             FROM ${this.tableName} p
@@ -93,7 +93,7 @@ class ProductModel extends BasicProductModel {
     async findWithFilters(filters = {}, limit = 50, offset = 0) {
 
         let [query, values] = this._getFindWithFiltersRequest(filters);
-        let paramCount = values.length;
+        let paramCount = values.length + 1;
 
         // Сортировка
         const orderBy = filters.order_by || 'created_at';
