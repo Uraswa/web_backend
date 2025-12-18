@@ -37,10 +37,10 @@ class ShopController {
             }
 
             const owner = await userModel.getUserById(owner_id);
-            if (!owner) {
+            if (!owner || !owner.is_active || !owner.is_activated) {
                 return res.status(404).json({
                     success: false,
-                    error: "Пользователь не найден"
+                    error: "Пользователь не найден или не активен"
                 });
             }
 
@@ -88,10 +88,10 @@ class ShopController {
             }
 
             const owner = await userModel.getUserById(owner_id);
-            if (!owner) {
+            if (!owner || !owner.is_active || !owner.is_activated) {
                 return res.status(404).json({
                     success: false,
-                    error: "Пользователь не найден"
+                    error: "Пользователь не найден или не активен"
                 });
             }
 
