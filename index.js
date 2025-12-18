@@ -2,6 +2,7 @@ import dotenv from "dotenv"
 import authRoutes from "./Apps/Auth/router.js";
 import clientRoutes from "./Apps/Client/router.js";
 import adminRoutes from "./Apps/Admin/router.js";
+import oppRoutes from "./Apps/OPP/router.js";
 
 dotenv.config();
 
@@ -29,6 +30,7 @@ app.disable('etag');
 authRoutes(router)
 clientRoutes(router)
 adminRoutes(router)
+oppRoutes(router)
 
 let server = app.listen(8000, () => {
     console.log("started server")
