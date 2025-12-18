@@ -6,7 +6,7 @@ class ShopModel extends BasicShopModel {
         super();
     }
 
-    // Возвращает список магазинов с владельцами, с опциональным поиском по названию
+    // Список магазинов с владельцем, опциональный поиск по названию
     async findAllWithOwner(search) {
         const params = [];
         let where = "WHERE 1=1";
@@ -60,6 +60,30 @@ class ShopModel extends BasicShopModel {
         `;
         const values = [name, owner_id, description || null, shop_id];
         const result = await Database.query(query, values, true);
+        return result.rows[0];
+    }
+
+    // Обновляет владельца магазина
+    async setOwner(shop_id, owner_id) {
+        const query = `
+            UPDATE ${this.tableName}
+            SET owner_id = $1
+            WHERE shop_id = $2
+            RETURNING *
+        `;
+        const result = await Database.query(query, [owner_id, shop_id], true);
+        return result.rows[0];
+    }
+
+    // Снимает владельца
+    async clearOwner(shop_id) {
+        const query = `
+            UPDATE ${this.tableName}
+            SET owner_id = NULL
+            WHERE shop_id = $1
+            RETURNING *
+        `;
+        const result = await Database.query(query, [shop_id], true);
         return result.rows[0];
     }
 

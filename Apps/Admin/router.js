@@ -11,6 +11,8 @@ export default (router) => {
     router.post('/api/admin/shops', authMiddleware, adminMiddleware, ShopController.createShop);
     router.delete('/api/admin/shops/:shopId', authMiddleware, adminMiddleware, ShopController.deleteShop);
     router.put('/api/admin/shops/:shopId', authMiddleware, adminMiddleware, ShopController.updateShop);
+    router.post('/api/admin/shops/:shopId/seller', authMiddleware, adminMiddleware, ShopController.setSeller);
+    router.delete('/api/admin/shops/:shopId/seller', authMiddleware, adminMiddleware, ShopController.deleteSeller);
 
     // Активные пользователи (для выбора продавца)
     router.get('/api/admin/users/active', authMiddleware, adminMiddleware, UserAdminController.listActiveUsers);
