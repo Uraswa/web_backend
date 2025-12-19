@@ -2,6 +2,23 @@
 
 class CategoryController {
 
+    async getAllCategories(req, res) {
+        try {
+            const categories = await CategoryModel.findAll();
+
+            return res.status(200).json({
+                success: true,
+                data: { categories }
+            });
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({
+                success: false,
+                error: 'Ошибка при получении категорий'
+            });
+        }
+    }
+
     async getFilters(req, res) {
         try {
             const {category_id} = req.query;
