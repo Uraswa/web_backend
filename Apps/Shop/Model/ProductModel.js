@@ -32,21 +32,21 @@ class ProductModel extends BasicProductModel {
     }
 
     // Обновление товара (для страницы редактирования)
-    async updateProduct(productId, { categoryId, shopId, name, description, photos, price }) {
-        const query = `
-            UPDATE ${this.tableName}
-            SET category_id = $1,
-                shop_id = $2,
-                name = $3,
-                description = $4,
-                photos = $5,
-                price = $6
-            WHERE product_id = $7
-            RETURNING *
-        `;
-        const result = await Database.query(query, [categoryId, shopId, name, description, photos, price, productId]);
-        return result.rows[0];
-    }
+    async updateProduct(productId, { categoryId, name, description, photos, price }) {
+    const query = `
+        UPDATE ${this.tableName}
+        SET category_id = $1,
+            name = $2,
+            description = $3,
+            photos = $4,
+            price = $5
+        WHERE product_id = $6
+        RETURNING *
+    `;
+    const result = await Database.query(query, [categoryId, name, description, photos, price, productId]);
+    return result.rows[0];
+}
+
 
     // Добавление нового товара (для страницы добавления товара)
     async addProduct({ categoryId, shopId, name, description, photos, price }) {
