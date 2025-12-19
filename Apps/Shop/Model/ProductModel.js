@@ -58,6 +58,11 @@ class ProductModel extends BasicProductModel {
         const result = await Database.query(query, [categoryId, shopId, name, description, photos, price]);
         return result.rows[0];
     }
+
+    // Получить товар по ID
+    async getById(productId) {
+        return await this.findById(productId);
+    }
 }
 
 

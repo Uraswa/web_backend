@@ -18,6 +18,11 @@ class ShopModel extends BasicShopModel {
         const result = await Database.query(query, [name, description, shopId]);
         return result.rows[0];
     }
+
+    // Получить магазин по ID
+    async getById(shopId) {
+        return await this.findById(shopId);
+    }
 }
 
 export default new ShopModel();
