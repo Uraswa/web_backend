@@ -4,6 +4,7 @@ import CartController from './Controller/CartController.js';
 import OrderController from './Controller/OrderController.js';
 import authMiddleware from "../../Core/Middleware/authMiddleware.js";
 import CategoryController from "./Controller/CategoryController.js";
+import CarouselController from './Controller/CarouselController.js';
 
 export default (router) => {
 
@@ -40,4 +41,7 @@ export default (router) => {
 //Категории
     router.get('/api/categories', CategoryController.getAllCategories);
     router.get('/api/categories/getFilters', CategoryController.getFilters);
+
+// Рекламная карусель
+    router.get('/carousel/slides', CarouselController.getSlides);
 }
