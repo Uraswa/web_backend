@@ -41,6 +41,7 @@ export default (router) => {
 //Категории
     router.get('/api/categories', CategoryController.getAllCategories);
     router.get('/api/categories/getFilters', CategoryController.getFilters);
+    router.get('/api/characteristics/names', CategoryController.getCharacteristicNames);
 
 // Рекламная карусель
     router.get('/carousel/slides', CarouselController.getSlides);
