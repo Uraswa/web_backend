@@ -86,15 +86,27 @@ class ProductModel extends BasicProductModel {
                     values.push(char_filter.filter);
                     paramCount++;
 
-                    if (char_filter.min !== undefined && !!Number.parseFloat(char_filter.min)){
-                        query += ` AND jsonb_extract_path_text(p.characteristics, $${paramCount}) >= $${paramCount + 1}`;
-                        values.push(char_filter.filter, char_filter.min);
+                    if (char_filter.min !== undefined && Number.isFinite(Number.parseFloat(char_filter.min))){
+                        const minNum = Number.parseFloat(char_filter.min);
+                        query += ` AND (
+                            COALESCE(
+                                NULLIF(jsonb_extract_path_text(p.characteristics, $${paramCount}), '')::numeric,
+                                0
+                            ) >= $${paramCount + 1}
+                        )`;
+                        values.push(char_filter.filter, minNum);
                         paramCount += 2;
                     }
 
-                    if (char_filter.max !== undefined && !!Number.parseFloat(char_filter.max)){
-                        query += ` AND jsonb_extract_path_text(p.characteristics, $${paramCount}) <= $${paramCount + 1}`;
-                        values.push(char_filter.filter, char_filter.max);
+                    if (char_filter.max !== undefined && Number.isFinite(Number.parseFloat(char_filter.max))){
+                        const maxNum = Number.parseFloat(char_filter.max);
+                        query += ` AND (
+                            COALESCE(
+                                NULLIF(jsonb_extract_path_text(p.characteristics, $${paramCount}), '')::numeric,
+                                999999999
+                            ) <= $${paramCount + 1}
+                        )`;
+                        values.push(char_filter.filter, maxNum);
                         paramCount += 2;
                     }
                 }
