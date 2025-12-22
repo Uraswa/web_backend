@@ -27,7 +27,7 @@ class CartController {
         try {
             const user = req.user;
             const {productId} = req.params;
-            const {quantity = 1} = req.body;
+            const {quantity = 1, add = false} = req.body;
 
             const product = await ProductModel.findById(productId);
             if (!product) {
@@ -37,7 +37,7 @@ class CartController {
                 });
             }
 
-            const cart = await CartService.updateCartItem(user.user_id, productId, parseInt(quantity));
+            const cart = await CartService.updateCartItem(user.user_id, productId, parseInt(quantity), add);
             return res.status(200).json({
                 success: true,
                 data: cart

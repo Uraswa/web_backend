@@ -102,11 +102,13 @@ class OrderController {
                 orders.map(async (order) => {
                     const products = await OrderModel.getOrderProducts(order.order_id);
                     const total = await OrderModel.calculateTotal(order.order_id);
+                    const statusHistory = await ordersService.getOrderStatusHistory(order.order_id);
 
                     return {
                         ...order,
                         products,
-                        total: parseFloat(total).toFixed(2)
+                        total: parseFloat(total).toFixed(2),
+                        current_status: statusHistory.length !== 0 ? statusHistory[statusHistory.length - 1].name : null
                     };
                 })
             );
@@ -149,9 +151,16 @@ class OrderController {
 
             const orderDetails = await OrderModel.getOrderSummary(orderId);
 
+            // Получаем историю статусов заказа
+            const statusHistory = await ordersService.getOrderStatusHistory(orderId);
+
             return res.status(200).json({
                 success: true,
-                data: orderDetails
+                data: {
+                    ...orderDetails,
+                    current_status: statusHistory.length !== 0 ? statusHistory[statusHistory.length - 1].name : null,
+                    status_history: statusHistory
+                }
             });
         } catch (error) {
             console.error(error);

@@ -1178,6 +1178,157 @@ class OrdersService {
             };
         }
     }
+
+    /**
+     * Получить историю статусов заказа для клиента
+     * @param {number} orderId - ID заказа
+     * @returns {Promise<Array>} История статусов в формате [{name: "Упаковывается", time: timestamp}]
+     */
+    async getOrderStatusHistory(orderId) {
+        try {
+            const statusHistory = [];
+
+            // 1. Получаем базовую информацию о заказе
+            const orderResult = await Database.query(
+                `SELECT created_date, received_date
+                 FROM orders
+                 WHERE order_id = $1`,
+                [orderId]
+            );
+
+            if (orderResult.rows.length === 0) {
+                throw new Error('Заказ не найден');
+            }
+
+            const order = orderResult.rows[0];
+
+            // 2. Статус "Упаковывается" - всегда есть, время создания заказа
+            statusHistory.push({
+                name: "Упаковывается",
+                time: order.created_date
+            });
+
+            // 3. Получаем все товары заказа с заказанным количеством
+            const productsResult = await Database.query(
+                `SELECT product_id, ordered_count
+                 FROM order_products
+                 WHERE order_id = $1`,
+                [orderId]
+            );
+
+            if (productsResult.rows.length === 0) {
+                return statusHistory;
+            }
+
+            // Создаем карту product_id -> ordered_count
+            const orderedCountMap = {};
+            for (const product of productsResult.rows) {
+                orderedCountMap[product.product_id] = product.ordered_count;
+            }
+
+            // 4. Проверяем статус "Передан в доставку"
+            // Все товары должны иметь статус sent_to_logistics в истории
+            const sentToLogisticsResult = await Database.query(
+                `SELECT product_id, SUM(count) as total_sent, MAX(date) as last_sent_date
+                 FROM order_product_statuses
+                 WHERE order_id = $1
+                   AND order_product_status = 'sent_to_logistics'
+                 GROUP BY product_id`,
+                [orderId]
+            );
+
+            // Проверяем, все ли товары полностью отправлены
+            let allProductsSent = true;
+            let maxSentDate = null;
+
+            for (const product of productsResult.rows) {
+                const sentRecord = sentToLogisticsResult.rows.find(r => r.product_id === product.product_id);
+                const totalSent = sentRecord ? parseInt(sentRecord.total_sent) : 0;
+
+                if (totalSent < product.ordered_count) {
+                    allProductsSent = false;
+                    break;
+                }
+
+                if (sentRecord && sentRecord.last_sent_date) {
+                    if (!maxSentDate || sentRecord.last_sent_date > maxSentDate) {
+                        maxSentDate = sentRecord.last_sent_date;
+                    }
+                }
+            }
+
+            if (allProductsSent && maxSentDate) {
+                statusHistory.push({
+                    name: "Передан в доставку",
+                    time: maxSentDate
+                });
+            }
+
+            // 5. Проверяем статус "Ожидает в ПВЗ"
+            // Все товары должны иметь статус arrived_in_opp с is_target_opp = true
+            const arrivedInTargetOppResult = await Database.query(
+                `SELECT product_id, SUM(count) as total_arrived, MAX(date) as last_arrived_date
+                 FROM order_product_statuses
+                 WHERE order_id = $1
+                   AND order_product_status = 'arrived_in_opp'
+                   AND data->>'is_target_opp' = 'true'
+                 GROUP BY product_id`,
+                [orderId]
+            );
+
+            // Проверяем, все ли товары прибыли в целевой ПВЗ
+            let allProductsInTargetOpp = true;
+            let maxArrivedDate = null;
+
+            for (const product of productsResult.rows) {
+                const arrivedRecord = arrivedInTargetOppResult.rows.find(r => r.product_id === product.product_id);
+                const totalArrived = arrivedRecord ? parseInt(arrivedRecord.total_arrived) : 0;
+
+                if (totalArrived < product.ordered_count) {
+                    allProductsInTargetOpp = false;
+                    break;
+                }
+
+                if (arrivedRecord && arrivedRecord.last_arrived_date) {
+                    if (!maxArrivedDate || arrivedRecord.last_arrived_date > maxArrivedDate) {
+                        maxArrivedDate = arrivedRecord.last_arrived_date;
+                    }
+                }
+            }
+
+            if (allProductsInTargetOpp && maxArrivedDate) {
+                statusHistory.push({
+                    name: "Ожидает в ПВЗ",
+                    time: maxArrivedDate
+                });
+            }
+
+            // 6. Проверяем статус "Завершен"
+            // Заказ должен иметь статус done в таблице order_statuses
+            const doneStatusResult = await Database.query(
+                `SELECT date
+                 FROM order_statuses
+                 WHERE order_id = $1
+                   AND status = 'done'
+                 ORDER BY date DESC
+                 LIMIT 1`,
+                [orderId]
+            );
+
+            if (doneStatusResult.rows.length > 0) {
+                statusHistory.push({
+                    name: "Завершен",
+                    time: order.received_date || doneStatusResult.rows[0].date
+                });
+            }
+
+            return statusHistory;
+
+        } catch (error) {
+            console.error('Ошибка в getOrderStatusHistory:', error);
+            throw error;
+        }
+    }
 }
 
 export default new OrdersService();

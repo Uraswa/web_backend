@@ -1,4 +1,4 @@
-﻿﻿import BasicProductModel from "../Model/BasicProductModel.js";
+﻿import BasicProductModel from "../Model/BasicProductModel.js";
 
 class CartService {
 
@@ -68,7 +68,7 @@ class CartService {
     }
 
     // Обновление количества товара в корзине
-    async updateCartItem(user_id, productId, quantity) {
+    async updateCartItem(user_id, productId, quantity, add = false) {
         try {
 
             if (!this._carts[user_id] && quantity === 0) {
@@ -103,7 +103,7 @@ class CartService {
                 cart.items.splice(existingItemIndex, 1);
             } else {
                 // Обновляем количество
-                cart.items[existingItemIndex].quantity = parseInt(quantity);
+                cart.items[existingItemIndex].quantity = add ? (cart.items[existingItemIndex] ? cart.items[existingItemIndex].quantity : 0) + parseInt(quantity) : parseInt(quantity);
                 cart.items[existingItemIndex].updated_at = new Date();
             }
 
