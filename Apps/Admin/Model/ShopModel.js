@@ -13,7 +13,15 @@ class ShopModel extends BasicShopModel {
 
         if (search) {
             params.push(`%${search}%`);
-            where += ` AND s.name ILIKE $${params.length}`;
+            const searchParam = `$${params.length}`;
+            where += `
+                AND (
+                    s.name ILIKE ${searchParam}
+                    OR ul.email ILIKE ${searchParam}
+                    OR up.first_name ILIKE ${searchParam}
+                    OR up.last_name ILIKE ${searchParam}
+                )
+            `;
         }
 
         const query = `
