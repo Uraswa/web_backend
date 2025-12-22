@@ -13,7 +13,15 @@ class OppAdminModel extends BasicPPOModel {
 
         if (search) {
             params.push(`%${search}%`);
-            where += ` AND o.address ILIKE $${params.length}`;
+            const searchParam = `$${params.length}`;
+            where += `
+                AND (
+                    o.address ILIKE ${searchParam}
+                    OR ul.email ILIKE ${searchParam}
+                    OR up.first_name ILIKE ${searchParam}
+                    OR up.last_name ILIKE ${searchParam}
+                )
+            `;
         }
 
         const query = `
