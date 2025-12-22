@@ -116,6 +116,50 @@ class OPPController {
   }
 
   /**
+   * Получить ПВЗ владельца
+   */
+  async getUserOpp(req, res) {
+    try {
+      const userId = req.user?.user_id;
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          error: 'Пользователь не авторизован'
+        });
+      }
+
+      const oppResult = await Database.query(
+        `SELECT opp_id, address, enabled
+         FROM opp
+         WHERE owner_id = $1
+         ORDER BY opp_id`,
+        [userId]
+      );
+
+      if (oppResult.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          error: 'opp_not_found'
+        });
+      }
+
+      return res.status(200).json({
+        success: true,
+        data: {
+          opp_id: oppResult.rows[0].opp_id,
+          opps: oppResult.rows
+        }
+      });
+    } catch (error) {
+      console.error('Error in getUserOpp:', error);
+      return res.status(500).json({
+        success: false,
+        error: 'Ошибка при получении ПВЗ'
+      });
+    }
+  }
+
+  /**
    * Получить список логистических заказов
    */
   async getOPPLogisticsOrders(req, res) {

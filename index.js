@@ -13,13 +13,13 @@ import tokenService from "./Core/Services/tokenService.js";
 const app = express()
 app.use(express.json())
 app.use(cookieParser());
-// app.use(cors({
-//     origin: "http://localhost:9000",
-//     credentials: true, // разрешаем куки и авторизационные заголовки
-//     allowedHeaders: ['Content-Type', 'Authorization']
-// }))
+app.use(cors({
+    origin: "http://localhost:3000",
+    credentials: true,
+    allowedHeaders: ['Content-Type', 'Authorization']
+}))
 
-//console.log(tokenService.generateTokens({user_id: 34395}, '999h', '9999h'))
+console.log(tokenService.generateTokens({user_id: 1}, '999h', '9999h'))
 
 const router = express.Router()
 app.use(router);

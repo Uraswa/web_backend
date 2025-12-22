@@ -17,6 +17,34 @@ Response Shape
 Endpoints
 ---------
 
+### Summary
+- `GET /api/user/opp` - owner OPP info and list.
+- `GET /api/opp/:oppId/statistics` - aggregated counters for the selected OPP.
+- `GET /api/opp/:oppId/orders?status=waiting|done|canceled` - list of orders with optional status filter.
+- `GET /api/opp/:oppId/orders/:orderId` - detailed order with products, seller info and status history.
+- `GET /api/opp/:oppId/logistics-orders?direction=all|incoming|outgoing` - list of logistics orders for the OPP.
+- `POST /api/opp/:oppId/receive-from-seller` - register receiving goods from the seller.
+- `POST /api/opp/:oppId/give-to-logistics` - hand over goods to a logistics order.
+- `POST /api/opp/:oppId/receive-from-logistics` - confirm receiving goods from a logistics order.
+- `POST /api/opp/:oppId/deliver` - deliver the order to the buyer, with optional rejected items.
+
+### GET `/api/user/opp`
+- Purpose: return the owner OPP. Since one owner = one OPP, the response includes the first OPP id and the full list for completeness.
+- Auth: `Authorization: Bearer <JWT>`.
+- 200 response:
+  ```json
+  {
+    "success": true,
+    "data": {
+      "opp_id": 1,
+      "opps": [
+        { "opp_id": 1, "address": "Start OPP", "enabled": true }
+      ]
+    }
+  }
+  ```
+- Errors: `401` if token is missing/invalid, `404 opp_not_found` if the owner has no OPP.
+
 ### GET `/api/opp/:oppId/statistics`
 - Purpose: aggregated counters for the selected OPP.
 - Query params: none.
@@ -27,7 +55,7 @@ Endpoints
 - Errors: `404` if the OPP does not exist or belongs to another owner.
 
 ### GET `/api/opp/:oppId/orders?status=waiting|done|canceled`
-- Purpose: list of orders with optional status filter (default – all).
+- Purpose: list of orders with optional status filter (default - all).
 - 200 response:
   ```json
   { "success": true, "data": { "orders": [ { "order_id": 1, ... } ], "count": 1 } }
@@ -37,7 +65,7 @@ Endpoints
 ### GET `/api/opp/:oppId/orders/:orderId`
 - Purpose: detailed order with products, seller info and status history.
 - Success: `{ "success": true, "data": { "order_id": 1, "products": [ ... ] } }`
-- Error: `404` → `{ "success": false, "error": "order_not_found" }`.
+- Error: `404` -> `{ "success": false, "error": "order_not_found" }`.
 
 ### GET `/api/opp/:oppId/logistics-orders?direction=all|incoming|outgoing`
 - Purpose: inspect virtual logistics orders generated for the OPP.
@@ -89,9 +117,9 @@ Endpoints
 
 Common Errors
 -------------
-- `401 Unauthorized` – missing or invalid token.
-- `403 Access Denied` – user is not the owner of the OPP.
-- `404` – OPP/order not found or not owned by the user.
+- `401 Unauthorized` - missing or invalid token.
+- `403 Access Denied` - user is not the owner of the OPP.
+- `404` - OPP/order not found or not owned by the user.
 
 Tests
 -----

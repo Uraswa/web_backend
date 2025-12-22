@@ -40,22 +40,88 @@ class OPPModel extends BasicPPOModel {
    * @returns {Promise<Object>} - статистика
    */
   async getOPPStatistics(oppId) {
-    const stats = await Database.query(`
-      SELECT
-        COUNT(DISTINCT o.order_id) as total_orders,
-        COUNT(DISTINCT CASE WHEN os.status = 'done' THEN o.order_id END) as completed_orders,
-        COUNT(DISTINCT CASE WHEN os.status IN ('packing', 'shipping', 'waiting') THEN o.order_id END) as active_orders,
-        COUNT(DISTINCT CASE WHEN os.status = 'canceled' THEN o.order_id END) as canceled_orders
+    // Получаем все заказы для данного ПВЗ
+    const ordersResult = await Database.query(`
+      SELECT DISTINCT o.order_id, op.product_id, op.ordered_count
       FROM orders o
-      LEFT JOIN (
-        SELECT DISTINCT ON (order_id) order_id, status
-        FROM order_statuses
-        ORDER BY order_id, date DESC
-      ) os ON o.order_id = os.order_id
+      JOIN order_products op ON o.order_id = op.order_id
       WHERE o.opp_id = $1
     `, [oppId]);
 
-    return stats.rows[0];
+    console.log(`[OPPModel.getOPPStatistics] oppId=${oppId}, found ${ordersResult.rows.length} order products`);
+
+    if (ordersResult.rows.length === 0) {
+      // Проверяем, есть ли вообще заказы в системе
+      const allOrdersResult = await Database.query(`
+        SELECT o.order_id, o.opp_id
+        FROM orders o
+        LIMIT 5
+      `);
+      console.log(`[OPPModel.getOPPStatistics] All orders sample:`, allOrdersResult.rows);
+
+      return {
+        total_orders: "0",
+        completed_orders: "0",
+        active_orders: "0",
+        canceled_orders: "0"
+      };
+    }
+
+    const orderIds = [...new Set(ordersResult.rows.map(r => r.order_id))];
+    let completedOrders = 0;
+    let canceledOrders = 0;
+    let activeOrders = 0;
+
+    // Для каждого заказа анализируем статусы товаров
+    for (const orderId of orderIds) {
+      const orderProducts = ordersResult.rows.filter(r => r.order_id === orderId);
+
+      let allDelivered = true;
+      let allRefunded = true;
+      let hasAnyActivity = false;
+
+      for (const product of orderProducts) {
+        const statusInfo = await ordersService.getProductStatuses(product.product_id, orderId);
+        const distribution = statusInfo.data.current_distribution;
+
+        const deliveredCount = distribution.delivered || 0;
+        const refundedCount = distribution.refunded || 0;
+        const orderedCount = product.ordered_count;
+
+        // Если хотя бы один товар не полностью выдан, заказ не completed
+        if (deliveredCount < orderedCount) {
+          allDelivered = false;
+        }
+
+        // Если хотя бы один товар не полностью возвращен, заказ не canceled
+        if (refundedCount < orderedCount) {
+          allRefunded = false;
+        }
+
+        // Проверяем, есть ли какая-то активность
+        if (deliveredCount > 0 || refundedCount > 0 ||
+            distribution.at_start_opp > 0 || distribution.at_target_opp > 0 ||
+            Object.keys(distribution.sent_to_logistics).length > 0) {
+          hasAnyActivity = true;
+        }
+      }
+
+      // Определяем статус заказа
+      if (allDelivered) {
+        completedOrders++;
+      } else if (allRefunded) {
+        canceledOrders++;
+      } else if (hasAnyActivity) {
+        activeOrders++;
+      }
+    }
+
+    return {
+      total_orders: orderIds.length.toString(),
+      completed_orders: completedOrders.toString(),
+      active_orders: activeOrders.toString(),
+      canceled_orders: canceledOrders.toString()
+    };
   }
 
   /**

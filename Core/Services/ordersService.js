@@ -1,5 +1,5 @@
 ﻿import {Database} from "../Model/Database.js";
-import OuterLogisticsService from "./OuterLogisticsService.js";
+import OuterLogisticsService from "./outerLogisticsService.js";
 import {
     ArrivedInOppFromSellerDto,
     ArrivedInOppReturnOrderDto,

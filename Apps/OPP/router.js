@@ -5,6 +5,11 @@ import oppOwnerMiddleware from './Middleware/oppOwnerMiddleware.js';
 export default (router) => {
 
   // Информация о ПВЗ
+  router.get('/api/user/opp',
+    authMiddleware,
+    OPPController.getUserOpp
+  );
+
   router.get('/api/opp/:oppId/statistics',
     authMiddleware,
     oppOwnerMiddleware,

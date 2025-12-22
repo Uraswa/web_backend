@@ -13,6 +13,111 @@ class OuterLogisticsService {
     // Формат: { [logisticsOrderId]: { sourceOppId, targetOppId, products: [] } }
     _logisticsOrders = {};
     _nextLogisticsOrderId = 1;
+    _mockLogisticsEnabled = (process.env.MOCK_LOGISTICS || '').toLowerCase() === 'true';
+
+    constructor() {
+        // Создаем несколько демо логистических заказов
+        this._initializeDemoLogisticsOrders();
+    }
+
+    /**
+     * Инициализация демо логистических заказов в памяти
+     * @private
+     */
+    _initializeDemoLogisticsOrders() {
+        // Логистический заказ 1: ПВЗ 1 → ПВЗ 2
+        this._logisticsOrders[1] = {
+            logisticsOrderId: 1,
+            sourceOppId: 1,
+            targetOppId: 2,
+            createdDate: new Date('2025-01-10T10:00:00'),
+            products: [
+                {
+                    productId: 1,
+                    productName: 'Демо товар 1',
+                    clientOrderId: 101,
+                    clientReceiverId: 5,
+                    count: 3,
+                    price: 1500.00
+                },
+                {
+                    productId: 2,
+                    productName: 'Демо товар 2',
+                    clientOrderId: 101,
+                    clientReceiverId: 5,
+                    count: 2,
+                    price: 2500.00
+                }
+            ]
+        };
+
+        // Логистический заказ 2: ПВЗ 3 → ПВЗ 1
+        this._logisticsOrders[2] = {
+            logisticsOrderId: 2,
+            sourceOppId: 3,
+            targetOppId: 1,
+            createdDate: new Date('2025-01-11T14:30:00'),
+            products: [
+                {
+                    productId: 5,
+                    productName: 'Демо товар 5',
+                    clientOrderId: 102,
+                    clientReceiverId: 7,
+                    count: 1,
+                    price: 5000.00
+                }
+            ]
+        };
+
+        // Логистический заказ 3: ПВЗ 2 → ПВЗ 4
+        this._logisticsOrders[3] = {
+            logisticsOrderId: 3,
+            sourceOppId: 2,
+            targetOppId: 4,
+            createdDate: new Date('2025-01-12T09:15:00'),
+            products: [
+                {
+                    productId: 3,
+                    productName: 'Демо товар 3',
+                    clientOrderId: 103,
+                    clientReceiverId: 8,
+                    count: 5,
+                    price: 800.00
+                },
+                {
+                    productId: 4,
+                    productName: 'Демо товар 4',
+                    clientOrderId: 104,
+                    clientReceiverId: 9,
+                    count: 2,
+                    price: 3200.00
+                }
+            ]
+        };
+
+        // Логистический заказ 4: ПВЗ 1 → ПВЗ 3
+        this._logisticsOrders[4] = {
+            logisticsOrderId: 4,
+            sourceOppId: 1,
+            targetOppId: 3,
+            createdDate: new Date('2025-01-13T16:45:00'),
+            products: [
+                {
+                    productId: 6,
+                    productName: 'Демо товар 6',
+                    clientOrderId: 105,
+                    clientReceiverId: 10,
+                    count: 4,
+                    price: 1200.00
+                }
+            ]
+        };
+
+        // Обновляем счетчик ID
+        this._nextLogisticsOrderId = 5;
+
+        console.log(`[OuterLogisticsService] Инициализировано ${Object.keys(this._logisticsOrders).length} демо логистических заказов`);
+    }
 
     /**
      * Проверка готовности заказа к отправке и создание логистических заказов
@@ -76,6 +181,14 @@ class OuterLogisticsService {
                         order.receiver_id,
                         order.target_opp_id)
                 ],  null, auto_add_to_logistics);
+
+                if (this._mockLogisticsEnabled && planResult?.success && planResult?.data?.logistics_orders) {
+                    for (const logisticsOrder of planResult.data.logistics_orders) {
+                        if (logisticsOrder?.logistics_order_id) {
+                            await this.addProductsToOpp(logisticsOrder.logistics_order_id);
+                        }
+                    }
+                }
 
                 return {
                     success: true,
