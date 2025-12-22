@@ -11,4 +11,5 @@ export default (router) => {
     router.post('/api/changePassword', notAuthMiddleware, UserController.changePassword.bind(UserController));
     router.get('/api/activateAccount', notAuthMiddleware, UserController.activateAccount.bind(UserController));
     router.get('/api/doesUserExist', authMiddleware, UserController.doesUserExist.bind(UserController));
+    router.post('/api/createProfile', authMiddleware, UserController.createProfile.bind(UserController));
 }

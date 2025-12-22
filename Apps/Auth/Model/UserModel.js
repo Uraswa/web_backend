@@ -188,6 +188,18 @@ class UserModel extends BasicUserModel{
         }
         return false;
     }
+
+    async checkProfileExists(user_id) {
+        const query = "SELECT user_id FROM user_profiles WHERE user_id = $1";
+        const result = await Database.query(query, [user_id]);
+        return result.rows[0];
+    }
+
+    async createProfile(user_id, first_name, last_name) {
+        const query = "INSERT INTO user_profiles (user_id, first_name, last_name) VALUES ($1, $2, $3) RETURNING *";
+        const result = await Database.query(query, [user_id, first_name, last_name], true);
+        return result.rows[0];
+    }
 }
 
 export default new UserModel();
