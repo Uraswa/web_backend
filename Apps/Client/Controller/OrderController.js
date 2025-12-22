@@ -1,6 +1,7 @@
 ﻿import OrderModel from "../Model/OrderModel.js";
 import CartService from "../../../Core/Services/cartService.js";
 import ordersService from "../../../Core/Services/ordersService.js";
+import { Database } from "../../../Core/Model/Database.js";
 
 class OrderController {
 
@@ -9,11 +10,29 @@ class OrderController {
         try {
             const user = req.user;
             const { opp_id } = req.body;
+            const orderLimit = 10;
 
             if (!opp_id) {
                 return res.status(400).json({
                     success: false,
                     error: 'ppo_not_defined'
+                });
+            }
+
+            const orderCountResult = await Database.query(
+                `SELECT COUNT(*)::int AS count
+                 FROM orders
+                 WHERE receiver_id = $1
+                   AND order_type = 'client'
+                   AND created_date >= date_trunc('day', NOW())
+                   AND created_date < date_trunc('day', NOW()) + interval '1 day'`,
+                [user.user_id]
+            );
+            const currentOrderCount = orderCountResult.rows[0]?.count ?? 0;
+            if (currentOrderCount >= orderLimit) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'order_limit_reached'
                 });
             }
 
