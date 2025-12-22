@@ -1315,10 +1315,25 @@ class OrdersService {
                 [orderId]
             );
 
+            const cancelOrderResult = await Database.query(
+                `SELECT date
+                 FROM order_statuses
+                 WHERE order_id = $1
+                   AND status = 'canceled'
+                 ORDER BY date DESC
+                 LIMIT 1`,
+                [orderId]
+            );
+
             if (doneStatusResult.rows.length > 0) {
                 statusHistory.push({
                     name: "Завершен",
                     time: order.received_date || doneStatusResult.rows[0].date
+                });
+            } else if (cancelOrderResult.rows.length > 0) {
+                statusHistory.push({
+                    name: "Отменен",
+                    time: cancelOrderResult.rows[0].date
                 });
             }
 

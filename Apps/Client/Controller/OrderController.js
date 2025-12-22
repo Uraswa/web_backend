@@ -118,7 +118,8 @@ class OrderController {
                         ...order,
                         products,
                         total: parseFloat(total).toFixed(2),
-                        current_status: statusHistory.length !== 0 ? statusHistory[statusHistory.length - 1].name : null
+                        current_status: statusHistory.length !== 0 ? statusHistory[statusHistory.length - 1].name : null,
+                        last_status_date: statusHistory.length !== 0 ? statusHistory[statusHistory.length - 1].time : null,
                     };
                 })
             );
