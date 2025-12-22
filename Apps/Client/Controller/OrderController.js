@@ -18,12 +18,22 @@ class OrderController {
             }
 
             // Получаем товары из корзины
-            const cart = await CartService.getCartWithDetails(user.user_id);
+            const {cart, changes} = await CartService.ValidateProductCounts(user.user_id);
 
             if (!cart || !cart.items || cart.items.length === 0) {
                 return res.status(400).json({
                     success: false,
                     error: 'cart_empty'
+                });
+            }
+
+            if (changes && changes.length !== 0) {
+                return res.status(200).json({
+                    success: false,
+                    error: 'products_count_changed',
+                    data: {
+                        cart: cart
+                    }
                 });
             }
 
