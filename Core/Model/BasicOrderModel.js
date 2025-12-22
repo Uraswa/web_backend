@@ -67,8 +67,14 @@ export default  class BasicOrderModel {
 
     async getOrderProducts(orderId) {
         const query = `
-            SELECT op.*, p.name, p.photos
-            FROM ${this.orderProductsTable} op
+            SELECT op.*, p.name, p.photos, (
+                SELECT SUM(ops.count) 
+                FROM order_product_statuses ops 
+                WHERE ops.order_id = op.order_id
+                  and ops.product_id = p.product_id 
+                  and ops.order_product_status = 'refunded'
+            ) as returned_count
+            FROM order_products op
             JOIN products p ON op.product_id = p.product_id
             WHERE op.order_id = $1
         `;

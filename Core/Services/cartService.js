@@ -1,4 +1,4 @@
-﻿﻿import BasicProductModel from "../Model/BasicProductModel.js";
+﻿import BasicProductModel from "../Model/BasicProductModel.js";
 
 class CartService {
 
@@ -10,6 +10,71 @@ class CartService {
         setInterval(() => {
             this._cleanupOldCarts();
         }, 24 * 60 * 60 * 1000); // Раз в сутки
+    }
+
+    // Валидация количества товаров в корзине
+    async ValidateProductCounts(user_id) {
+        try {
+            const changes = [];
+            const cart = this._carts[user_id];
+
+            // Если корзины нет или она пуста, возвращаем пустой результат
+            if (!cart || !cart.items || cart.items.length === 0) {
+                return {
+                    cart: {
+                        items: [],
+                        total: 0
+                    },
+                    changes: []
+                };
+            }
+
+            // Проверяем каждый товар в корзине
+            for (const item of cart.items) {
+                try {
+                    // Получаем актуальное количество товара из БД
+                    const product = await this._basicProductModel.findById(item.product_id);
+
+                    if (product) {
+                        const availableCount = product.count || 0;
+
+                        // Если в корзине больше, чем доступно в БД
+                        if (item.quantity > availableCount) {
+                            // Фиксируем изменение
+                            changes.push({
+                                product_id: item.product_id,
+                                set_count: availableCount
+                            });
+
+                            // Обновляем количество в корзине
+                            item.quantity = availableCount;
+                            item.updated_at = new Date();
+                        }
+                    }
+                } catch (error) {
+                    console.error(`Ошибка при валидации товара ${item.product_id}:`, error);
+                }
+            }
+
+            // Удаляем товары с нулевым количеством
+            cart.items = cart.items.filter(item => item.quantity > 0);
+
+            // Обновляем время изменения корзины, если были изменения
+            if (changes.length > 0) {
+                cart.updated_at = new Date();
+            }
+
+            // Получаем актуальную корзину с деталями
+            const cartWithDetails = await this.getCartWithDetails(user_id);
+
+            return {
+                cart: cartWithDetails,
+                changes
+            };
+        } catch (error) {
+            console.error('Ошибка в ValidateProductCounts:', error);
+            throw error;
+        }
     }
 
     // Получение корзины с деталями товаров
@@ -68,7 +133,7 @@ class CartService {
     }
 
     // Обновление количества товара в корзине
-    async updateCartItem(user_id, productId, quantity) {
+    async updateCartItem(user_id, productId, quantity, add = false) {
         try {
 
             if (!this._carts[user_id] && quantity === 0) {
@@ -103,7 +168,7 @@ class CartService {
                 cart.items.splice(existingItemIndex, 1);
             } else {
                 // Обновляем количество
-                cart.items[existingItemIndex].quantity = parseInt(quantity);
+                cart.items[existingItemIndex].quantity = add ? (cart.items[existingItemIndex] ? cart.items[existingItemIndex].quantity : 0) + parseInt(quantity) : parseInt(quantity);
                 cart.items[existingItemIndex].updated_at = new Date();
             }
 

@@ -5,6 +5,7 @@ import OrderController from './Controller/OrderController.js';
 import authMiddleware from "../../Core/Middleware/authMiddleware.js";
 import CategoryController from "./Controller/CategoryController.js";
 import CarouselController from './Controller/CarouselController.js';
+import OppController from './Controller/OppController.js';
 
 export default (router) => {
 
@@ -36,6 +37,7 @@ export default (router) => {
     router.post('/api/orders/create', authMiddleware, OrderController.createOrder);
     router.get('/api/orders', authMiddleware, OrderController.getUserOrders);
     router.get('/api/orders/:orderId', authMiddleware, OrderController.getOrderDetails);
+    router.post('/api/orders/:orderId/cancel', authMiddleware, OrderController.cancelOrder);
     router.get('/api/orders/success/:orderId', authMiddleware, OrderController.orderSuccess);
 
 //Категории
@@ -45,4 +47,9 @@ export default (router) => {
 
 // Рекламная карусель
     router.get('/carousel/slides', CarouselController.getSlides);
+
+// ПВЗ (Пункты выдачи заказов)
+    router.get('/api/opp/by-radius', OppController.GetOppsByRadius);
+    router.get('/api/opp/:oppId', OppController.getOppById);
+    router.get('/api/opp', OppController.getAllOpps);
 }

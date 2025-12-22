@@ -20,7 +20,7 @@ app.use(cors({
     allowedHeaders: ['Content-Type', 'Authorization']
 }))
 
-//console.log(tokenService.generateTokens({user_id: 34395}, '999h', '9999h'))
+console.log(tokenService.generateTokens({user_id: 34401}, '999h', '9999h'))
 
 const router = express.Router()
 app.use(router);
