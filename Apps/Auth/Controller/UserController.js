@@ -1,7 +1,7 @@
 ﻿import UserModel from "../Model/UserModel.js";
 import * as uuid from "uuid";
-import mailService from "../../../Core/services/mailService.js";
-import tokenService from "../../../Core/services/tokenService.js";
+import mailService from "../../../Core/Services/mailService.js";
+import tokenService from "../../../Core/Services/tokenService.js";
 
 class UserController {
 
@@ -89,7 +89,7 @@ class UserController {
 
             //console.log(activationLink)
 
-            await mailService.sendActivationMail(email, "http://" + process.env.API_URL + "/activation/" + activationLink)
+            // await mailService.sendActivationMail(email, "http://" + process.env.API_URL + "/activation/" + activationLink)
             res.status(200).json({
                 success: true,
                 data: {}

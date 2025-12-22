@@ -7,21 +7,43 @@ class ProductModel extends BasicProductModel {
     }
 
     // Получить список товаров (фильтр по названию) (для страницы список товаров)
-    async getProductListByName(searchTerm = '', limit = 20) {
+    async getProductListByOwnerId(ownerId, searchTerm = '', limit = 20) {
         if (searchTerm) {
-            return await this.searchByName(searchTerm, limit);
-        } else {
             const query = `
                 SELECT p.*, pc.name AS category_name, s.name AS shop_name
                 FROM ${this.tableName} p
                 JOIN product_categories pc ON p.category_id = pc.category_id
                 JOIN shops s ON p.shop_id = s.shop_id
+                WHERE s.owner_id = $1 AND p.name ILIKE $2
                 ORDER BY p.created_at DESC
-                LIMIT $1
+                LIMIT $3
             `;
-            const result = await Database.query(query, [limit]);
+            const result = await Database.query(query, [ownerId, `%${searchTerm}%`, limit]);
             return result.rows;
         }
+
+        const query = `
+            SELECT p.*, pc.name AS category_name, s.name AS shop_name
+            FROM ${this.tableName} p
+            JOIN product_categories pc ON p.category_id = pc.category_id
+            JOIN shops s ON p.shop_id = s.shop_id
+            WHERE s.owner_id = $1
+            ORDER BY p.created_at DESC
+            LIMIT $2
+        `;
+        const result = await Database.query(query, [ownerId, limit]);
+        return result.rows;
+    }
+
+    async getOwnerIdByProductId(productId) {
+        const query = `
+            SELECT s.owner_id
+            FROM ${this.tableName} p
+            JOIN shops s ON p.shop_id = s.shop_id
+            WHERE p.product_id = $1
+        `;
+        const result = await Database.query(query, [productId]);
+        return result.rows[0]?.owner_id ?? null;
     }
 
     // Удалить товар (для страницы список товаров)

@@ -1,4 +1,4 @@
-import OrderModel from "../models/OrderModel.js";
+import OrderModel from "../Model/OrderModel.js";
 
 class OrderController {
     // Список заказов продавца с ПВЗ и товарами

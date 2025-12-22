@@ -4,8 +4,14 @@ class ProductController {
     // Список товаров с фильтром по названию
     async getListProductByFilter(req, res) {
         try {
+            const ownerId = Number.parseInt(req.user?.user_id, 10);
+            if (!Number.isFinite(ownerId)) {
+                return res.status(401).json({ success: false, error: 'unauthorized' });
+            }
+
             const searchTerm = req.query.search || '';
-            const products = await ProductModel.getProductListByName(searchTerm);
+            const limit = Number.parseInt(req.query.limit, 10) || 20;
+            const products = await ProductModel.getProductListByOwnerId(ownerId, searchTerm, limit);
             res.json({ success: true, data: products });
         } catch (err) {
             console.error(err);
