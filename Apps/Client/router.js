@@ -38,5 +38,6 @@ export default (router) => {
     router.get('/api/orders/success/:orderId', authMiddleware, OrderController.orderSuccess);
 
 //Категории
+    router.get('/api/categories', CategoryController.getAll);
     router.get('/api/categories/getFilters', CategoryController.getFilters);
 }
