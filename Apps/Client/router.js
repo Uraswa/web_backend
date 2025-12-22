@@ -5,9 +5,9 @@ import OrderController from './Controller/OrderController.js';
 import authMiddleware from "../../Core/Middleware/authMiddleware.js";
 import CategoryController from "./Controller/CategoryController.js";
 import CarouselController from './Controller/CarouselController.js';
+import OppController from './Controller/OppController.js';
 
 export default (router) => {
-
 
 // Главная страница
     router.get('/api/products/popular', ProductController.getPopularProducts);
@@ -26,7 +26,7 @@ export default (router) => {
     router.delete('/api/products/:productId/feedback', authMiddleware, FeedbackController.deleteFeedback);
     router.get('/api/user/feedback', authMiddleware, FeedbackController.getUserFeedback);
 
-    // Корзина
+// Корзина
     router.get('/api/cart', authMiddleware, CartController.getCart);
     router.get('/api/cart/info', authMiddleware, CartController.getCartInfo);
     router.put('/api/cart/update/:productId', authMiddleware, CartController.updateCart);
@@ -42,6 +42,9 @@ export default (router) => {
     router.get('/api/categories', CategoryController.getAllCategories);
     router.get('/api/categories/getFilters', CategoryController.getFilters);
     router.get('/api/characteristics/names', CategoryController.getCharacteristicNames);
+
+// ПВЗ
+    router.get('/api/opps', OppController.listOpps);
 
 // Рекламная карусель
     router.get('/carousel/slides', CarouselController.getSlides);
