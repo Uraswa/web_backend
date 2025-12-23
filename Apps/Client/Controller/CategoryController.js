@@ -2,6 +2,10 @@
 
 class CategoryController {
 
+    async getAll(req, res) {
+        return this.getAllCategories(req, res);
+    }
+
     async getAllCategories(req, res) {
         try {
             const categories = await CategoryModel.findAll();
@@ -12,7 +16,7 @@ class CategoryController {
             });
         } catch (error) {
             console.error(error);
-            res.status(500).json({
+            return res.status(500).json({
                 success: false,
                 error: 'Ошибка при получении категорий'
             });

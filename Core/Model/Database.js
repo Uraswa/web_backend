@@ -3,7 +3,7 @@ import dotenv from "dotenv"
 dotenv.config();
 
 const Database = new PoolWrapper({
-    ports: [5432],
+    ports: [process.env.DB_PORT],
     base: {
         user: process.env.DB_USER,
         host: process.env.DB_HOST,
