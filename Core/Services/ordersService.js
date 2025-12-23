@@ -835,6 +835,20 @@ class OrdersService {
                 ]
             );
 
+            if (oppId == orderCheck.rows[0].target_opp_id) {
+                // Добавляем статус arrived_in_opp
+                    await client.query(
+                        `INSERT INTO order_product_statuses (order_id, product_id, order_product_status, count, date, data)
+                         VALUES ($1, $2, 'arrived_in_opp', $3, NOW(), $4)`,
+                        [
+                            orderId,
+                            productId,
+                            count,
+                            JSON.stringify({opp_id: oppId, is_target_opp: true})
+                        ]
+                    );
+            }
+
             await client.query('COMMIT');
 
 
