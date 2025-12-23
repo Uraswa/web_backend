@@ -245,7 +245,7 @@ class OPPController {
       const direction = req.query.direction || 'all'; // 'incoming' | 'outgoing' | 'all'
 
       // Используем метод из OPPModel (который читает из outerLogisticsService)
-      const logisticsOrders = OPPModel.getLogisticsOrdersByOPPId(oppId, direction);
+      const logisticsOrders = await OPPModel.getLogisticsOrdersByOPPId(oppId, direction);
 
       return res.status(200).json({
         success: true,
