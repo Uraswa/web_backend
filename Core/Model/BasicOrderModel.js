@@ -73,7 +73,7 @@ export default  class BasicOrderModel {
                 WHERE ops.order_id = op.order_id
                   and ops.product_id = p.product_id 
                   and ops.order_product_status = 'refunded'
-            ) as returned_count
+            ) as returned_count, p.shop_id
             FROM order_products op
             JOIN products p ON op.product_id = p.product_id
             WHERE op.order_id = $1

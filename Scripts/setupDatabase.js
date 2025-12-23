@@ -34,7 +34,7 @@ async function setupDatabase() {
 
     // Запускаем миграции
     console.log('Running migrations...');
-    exec('npm run migrate:up', (error, stdout, stderr) => {
+    exec('npm run migrate up', (error, stdout, stderr) => {
       if (error) {
         console.error('Migration error:', error);
         return;
