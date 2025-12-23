@@ -42,7 +42,7 @@ adminRoutes(router)
 oppRoutes(router)
 shopRouter(router)
 
-let server = app.listen(3000, () => {
+let server = app.listen(8000, () => {
     console.log("started server")
 })
 

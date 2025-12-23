@@ -1,4 +1,5 @@
 import OrderModel from "../Model/OrderModel.js";
+import ordersService from "../../../Core/Services/ordersService.js";
 
 class OrderController {
     // Список заказов продавца с ПВЗ и товарами
@@ -6,10 +7,41 @@ class OrderController {
         try {
             const shopId = parseInt(req.params.shopId);
             const orders = await OrderModel.getOrdersByShop(shopId);
-            res.json(orders);
+
+            let ordersResult = [];
+
+            for (let order of orders) {
+
+                let products = await OrderModel.getOrderProducts(order.order_id);
+                let orderProducts = [];
+
+                let su = 0;
+
+                let hasUngivenProducts = false;
+                for (let prod of products) {
+                    if (prod.shop_id != shopId) continue;
+                    if (!hasUngivenProducts) {
+                        let statuses = await ordersService.getProductStatuses(prod.product_id, order.order_id);
+                        if (statuses.success && statuses.data.current_distribution.waiting_for_product_arrival_in_opp > 0) {
+                            hasUngivenProducts = true;
+                        }
+                    }
+                    orderProducts.push(prod);
+                    su += prod.ordered_count * Number.parseFloat(prod.price)
+                }
+
+                if (!hasUngivenProducts) continue
+
+                order.products = orderProducts;
+                order.total = su;
+                ordersResult.push(order);
+
+            }
+
+            res.json(ordersResult);
         } catch (err) {
             console.error(err);
-            res.status(500).json({ error: 'Ошибка получения заказов' });
+            res.status(500).json({error: 'Ошибка получения заказов'});
         }
     }
 
@@ -17,17 +49,17 @@ class OrderController {
         try {
             const ownerId = Number.parseInt(req.user?.user_id, 10);
             if (!Number.isFinite(ownerId)) {
-                return res.status(401).json({ success: false, error: 'unauthorized' });
+                return res.status(401).json({success: false, error: 'unauthorized'});
             }
 
             const orderId = Number.parseInt(req.params.orderId, 10);
             if (!Number.isFinite(orderId)) {
-                return res.status(400).json({ success: false, error: 'invalid_order_id' });
+                return res.status(400).json({success: false, error: 'invalid_order_id'});
             }
 
             const rows = await OrderModel.getSellerOrderDetails(orderId, ownerId);
             if (!rows || rows.length === 0) {
-                return res.status(404).json({ success: false, error: 'order_not_found' });
+                return res.status(404).json({success: false, error: 'order_not_found'});
             }
 
             const first = rows[0];
@@ -63,7 +95,7 @@ class OrderController {
             });
         } catch (err) {
             console.error(err);
-            return res.status(500).json({ success: false, error: 'Ошибка получения деталей заказа' });
+            return res.status(500).json({success: false, error: 'Ошибка получения деталей заказа'});
         }
     }
 }

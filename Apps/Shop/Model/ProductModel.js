@@ -54,7 +54,7 @@ class ProductModel extends BasicProductModel {
     }
 
     // Добавление нового товара или товара в группу вариантов
-    async addProduct({ categoryId, shopId, name, description, photos, price, characteristics = {}, variantGroupId = null }) {
+    async addProduct({ categoryId, shopId, name, description, photos, price, characteristics = {}, variantGroupId = null, stockChange = 0 }) {
         // Если это товар в группе вариантов, проверяем уникальность комбинации
         if (variantGroupId) {
             const existing = await Database.query(
@@ -69,9 +69,9 @@ class ProductModel extends BasicProductModel {
 
         // Вставляем новый товар
         const query = `
-            INSERT INTO ${this.tableName} 
-                (category_id, shop_id, name, description, photos, price, characteristics, variant_group_id)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            INSERT INTO ${this.tableName}
+                (category_id, shop_id, name, description, photos, price, characteristics, variant_group_id, count)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, GREATEST($9, 0))
             RETURNING *
         `;
         try {
@@ -83,8 +83,9 @@ class ProductModel extends BasicProductModel {
                 photos,
                 price,
                 JSON.stringify(characteristics),
-                variantGroupId
-            ]);
+                variantGroupId,
+                stockChange
+            ], true);
 
             // ВАЖНО: products.variant_group_id — FK на product_variants.variant_group_id.
             // Если variantGroupId не передан, оставляем NULL (обычный товар без группы вариантов).
@@ -99,7 +100,7 @@ class ProductModel extends BasicProductModel {
     }
 
 // Обновление товара с проверкой уникальности комбинации в группе вариантов
-    async updateProduct(productId, { categoryId, name, description, photos, price, characteristics = {}, variantGroupId = null }) {
+    async updateProduct(productId, { categoryId, name, description, photos, price, characteristics = {}, variantGroupId = null, stockChange = 0 }) {
         // Получаем текущий товар
         const product = await this.getById(productId);
         if (!product) throw new Error('Товар не найден');
@@ -121,7 +122,7 @@ class ProductModel extends BasicProductModel {
             }
         }
 
-        // Обновляем товар
+        // Обновляем товар с изменением остатков
         const query = `
             UPDATE ${this.tableName}
             SET category_id = $1,
@@ -130,8 +131,9 @@ class ProductModel extends BasicProductModel {
                 photos = $4,
                 price = $5,
                 characteristics = $6,
-                variant_group_id = $7
-            WHERE product_id = $8
+                variant_group_id = $7,
+                count = GREATEST(count + $8, 0)
+            WHERE product_id = $9
             RETURNING *
         `;
         const result = await Database.query(query, [
@@ -142,8 +144,9 @@ class ProductModel extends BasicProductModel {
             price,
             JSON.stringify(characteristics),
             groupId,
+            stockChange,
             productId
-        ]);
+        ], true);
 
         return result.rows[0];
     }
@@ -152,18 +155,6 @@ class ProductModel extends BasicProductModel {
     // Получить товар по ID
     async getById(productId) {
         return await this.findById(productId);
-    }
-
-    // Получить фильтровые характеристики категории
-    async getCategoryCharacteristics(categoryId) {
-        const query = `
-            SELECT *
-            FROM category_characteristics
-            WHERE category_id = $1
-            ORDER BY allow_in_filter DESC, name
-        `;
-        const result = await Database.query(query, [categoryId]);
-        return result.rows;
     }
 }
 

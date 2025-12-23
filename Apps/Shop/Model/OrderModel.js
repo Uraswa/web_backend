@@ -9,29 +9,18 @@ class OrderModel extends BasicOrderModel {
     // Страница списка заказов, в которых есть товары данного продавца и инфой в какой ПВЗ отнести
     async getOrdersByShop(shopId) {
     const query = `
-        SELECT 
-            o.order_id,
-            o.opp_id,
-            o.created_date,
-            opp.address AS opp_address,
-            opp.work_time AS opp_work_time,
-            os.status AS current_status,
-            p.product_id,
-            p.name AS product_name,
-            p.photos AS product_photos,
-            op.price,
-            op.ordered_count
+        SELECT o.order_id,
+               o.opp_id,
+               o.created_date
         FROM order_products op
-        JOIN products p ON op.product_id = p.product_id
-        JOIN orders o ON op.order_id = o.order_id
-        LEFT JOIN opp ON o.opp_id = opp.opp_id
-        LEFT JOIN (
-            SELECT DISTINCT ON (order_id) order_id, status
-            FROM order_statuses
-            ORDER BY order_id, date DESC
-        ) os ON o.order_id = os.order_id
-        WHERE p.shop_id = $1
-        ORDER BY o.created_date DESC
+                 JOIN products p ON op.product_id = p.product_id
+                 JOIN orders o ON op.order_id = o.order_id
+        WHERE p.shop_id = $1 AND (
+            SELECT 1 FROM order_statuses os 
+                     WHERE 
+                         os.order_id = o.order_id 
+                             and (os.status = 'done' or os.status = 'canceled') LIMIT 1) IS NULL
+        GROUP BY o.order_id
     `;
     const result = await Database.query(query, [shopId]);
     return result.rows;
