@@ -38,4 +38,13 @@ export default class BasicProductCategoryModel {
         const result = await Database.query(query, [categoryId]);
         return result.rows;
     }
+
+    async getCharacteristicNamesByIds(ids) {
+        if (!Array.isArray(ids) || ids.length === 0) return [];
+        const query = `SELECT characteristic_id, name
+                       FROM category_characteristics
+                       WHERE characteristic_id = ANY($1)`;
+        const result = await Database.query(query, [ids]);
+        return result.rows;
+    }
 }
