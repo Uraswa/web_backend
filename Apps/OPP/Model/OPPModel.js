@@ -5,6 +5,31 @@ import ordersService from '../../../Core/Services/ordersService.js';
 import OuterLogisticsService from '../../../Core/Services/outerLogisticsService.js';
 
 class OPPModel extends BasicPPOModel {
+  _firstPhoto(photos) {
+    if (!photos) return '';
+
+    if (Array.isArray(photos)) {
+      return photos[0] || '';
+    }
+
+    if (typeof photos === 'string') {
+      const trimmed = photos.trim();
+      if (!trimmed) return '';
+
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) {
+          return parsed[0] || '';
+        }
+      } catch {
+        // ignore
+      }
+
+      return trimmed;
+    }
+
+    return '';
+  }
 
   /**
    * Получить заказы для конкретного ПВЗ
@@ -23,11 +48,32 @@ class OPPModel extends BasicPPOModel {
       orders = orders.filter(order => order.current_status === filters.status);
     }
 
-    // Для каждого заказа добавляем детали товаров через ordersService
+    const oppResult = await Database.query(
+      'SELECT address FROM opp WHERE opp_id = $1',
+      [oppId]
+    );
+    const pickupAddress = oppResult.rows[0]?.address || '';
+
     const ordersWithDetails = await Promise.all(
       orders.map(async (order) => {
-        const details = await ordersService.getOrderWithDetails(order.order_id);
-        return details;
+        const products = await basicOrderModel.getOrderProducts(order.order_id);
+        const total = await basicOrderModel.calculateTotal(order.order_id);
+
+        return {
+          order_id: order.order_id,
+          total_sum: Number(total || 0).toFixed(2),
+          status: order.current_status || 'waiting',
+          created_at: order.created_date,
+          seller_name: '',
+          pickup_address: pickupAddress,
+          products: products.map((product) => ({
+            product_id: product.product_id,
+            name: product.name,
+            photo: this._firstPhoto(product.photos),
+            quantity: product.ordered_count,
+            price: String(product.price)
+          }))
+        };
       })
     );
 

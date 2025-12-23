@@ -10,6 +10,12 @@ export default (router) => {
     OPPController.getUserOpp
   );
 
+  // Backward-compatible alias (some frontend code used plural path)
+  router.get('/api/user/opps',
+    authMiddleware,
+    OPPController.getUserOpp
+  );
+
   router.get('/api/opp/:oppId/statistics',
     authMiddleware,
     oppOwnerMiddleware,
@@ -17,6 +23,12 @@ export default (router) => {
   );
 
   // Заказы
+  router.get('/api/opp/:oppId/order-statuses',
+    authMiddleware,
+    oppOwnerMiddleware,
+    OPPController.getOPPOrderStatuses
+  );
+
   router.get('/api/opp/:oppId/orders',
     authMiddleware,
     oppOwnerMiddleware,

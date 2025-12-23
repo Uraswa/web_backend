@@ -153,7 +153,7 @@ class UserController {
     async refreshToken(req, res) {
         try {
             const {refreshToken} = req.cookies;
-            console.log("RefreshToken token: " + refreshToken)
+            // console.log("RefreshToken token: " + refreshToken)
 
             if (!refreshToken) {
                 return res.status(200).json({
@@ -197,7 +197,7 @@ class UserController {
                 });
             }
 
-            res.cookie('refreshToken', refreshToken, {maxAge: 30 * 24 * 60 * 60 * 1000, httpOnly: true})
+            res.cookie('refreshToken', tokens.refreshToken, {maxAge: 30 * 24 * 60 * 60 * 1000, httpOnly: true})
 
 
             res.status(200).json({
