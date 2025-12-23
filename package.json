@@ -8,7 +8,8 @@
     "dev": "nodemon index.js",
     "test": "cross-env NODE_OPTIONS=--experimental-vm-modules jest",
     "migrate": "node-pg-migrate",
-    "db:setup": "node scripts/setupDatabase.js"
+    "db:setup": "node scripts/setupDatabase.js",
+    "seed:opp": "cross-env SEED_OPP_DEMO=1 node Scripts/seedOppDemo.js"
   },
   "keywords": [],
   "author": "",

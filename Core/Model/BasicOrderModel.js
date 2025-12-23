@@ -48,7 +48,7 @@ export default  class BasicOrderModel {
 
     async findByOppId(oppId) {
         const query = `
-            SELECT o.*, 
+            SELECT o.*,
                    up.first_name, up.last_name,
                    os.status as current_status
             FROM ${this.tableName} o

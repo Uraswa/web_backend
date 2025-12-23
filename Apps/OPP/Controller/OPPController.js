@@ -2,6 +2,32 @@ import OPPModel from '../Model/OPPModel.js';
 import ordersService from '../../../Core/Services/ordersService.js';
 import { Database } from '../../../Core/Model/Database.js';
 
+function firstPhoto(photos) {
+  if (!photos) return '';
+
+  if (Array.isArray(photos)) {
+    return photos[0] || '';
+  }
+
+  if (typeof photos === 'string') {
+    const trimmed = photos.trim();
+    if (!trimmed) return '';
+
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (Array.isArray(parsed)) {
+        return parsed[0] || '';
+      }
+    } catch {
+      // ignore
+    }
+
+    return trimmed;
+  }
+
+  return '';
+}
+
 async function getProductRemainingCount(orderId, productId) {
   const productResult = await Database.query(
     `SELECT ordered_count
@@ -86,6 +112,54 @@ async function validateRejectedProductsRequest(orderId, oppId, rejectedProducts 
 }
 
 class OPPController {
+  /**
+   * Получить доступные статусы заказов для ПВЗ (по данным БД)
+   */
+  async getOPPOrderStatuses(req, res) {
+    try {
+      const oppId = Number.parseInt(req.params.oppId, 10);
+      if (!Number.isInteger(oppId)) {
+        return res.status(400).json({
+          success: false,
+          error: 'invalid_opp_id'
+        });
+      }
+
+      const result = await Database.query(
+        `
+          SELECT DISTINCT os.status
+          FROM orders o
+          JOIN (
+            SELECT DISTINCT ON (order_id) order_id, status
+            FROM order_statuses
+            ORDER BY order_id, date DESC
+          ) os ON os.order_id = o.order_id
+          WHERE o.opp_id = $1
+            AND os.status IS NOT NULL
+        `,
+        [oppId]
+      );
+
+      const preferredOrder = ['packing', 'shipping', 'waiting', 'done', 'canceled'];
+      const statuses = result.rows
+        .map((row) => row.status)
+        .filter(Boolean)
+        .sort((a, b) => preferredOrder.indexOf(a) - preferredOrder.indexOf(b));
+
+      return res.status(200).json({
+        success: true,
+        data: {
+          statuses
+        }
+      });
+    } catch (error) {
+      console.error('Error in getOPPOrderStatuses:', error);
+      return res.status(500).json({
+        success: false,
+        error: 'Ошибка при получении статусов заказов'
+      });
+    }
+  }
 
   /**
    * Получить список заказов ПВЗ
@@ -111,6 +185,53 @@ class OPPController {
       return res.status(500).json({
         success: false,
         error: 'Ошибка при получении списка заказов'
+      });
+    }
+  }
+
+  /**
+   * Получить ПВЗ владельца
+   */
+  async getUserOpp(req, res) {
+    try {
+      const userId = req.user?.user_id;
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          error: 'Пользователь не авторизован'
+        });
+      }
+
+      const oppResult = await Database.query(
+        `SELECT opp_id, address, enabled
+         FROM opp
+         WHERE owner_id = $1
+         ORDER BY opp_id`,
+        [userId]
+      );
+
+      if (oppResult.rows.length === 0) {
+        return res.status(200).json({
+          success: true,
+          data: {
+            opp_id: null,
+            opps: []
+          }
+        });
+      }
+
+      return res.status(200).json({
+        success: true,
+        data: {
+          opp_id: oppResult.rows[0].opp_id,
+          opps: oppResult.rows
+        }
+      });
+    } catch (error) {
+      console.error('Error in getUserOpp:', error);
+      return res.status(500).json({
+        success: false,
+        error: 'Ошибка при получении ПВЗ'
       });
     }
   }
@@ -309,20 +430,59 @@ class OPPController {
    */
   async getOrderDetails(req, res) {
     try {
-      const { orderId } = req.params;
+      const { oppId, orderId } = req.params;
+      const parsedOppId = Number.parseInt(oppId, 10);
+      const parsedOrderId = Number.parseInt(orderId, 10);
 
-      const orderDetails = await ordersService.getOrderWithDetails(parseInt(orderId));
+      const orderDetails = await ordersService.getOrderWithDetails(parsedOrderId);
 
-      if (!orderDetails) {
+      const orderOppId = orderDetails ? Number.parseInt(String(orderDetails.opp_id), 10) : NaN;
+      if (!orderDetails || !Number.isInteger(orderOppId) || orderOppId !== parsedOppId) {
         return res.status(404).json({
           success: false,
           error: 'order_not_found'
         });
       }
 
+      const statusResult = await Database.query(
+        `SELECT status, date, data
+         FROM order_statuses
+         WHERE order_id = $1
+         ORDER BY date DESC`,
+        [parsedOrderId]
+      );
+
+      const currentStatus = statusResult.rows[0]?.status || 'waiting';
+      const statusHistory = statusResult.rows.map((row) => ({
+        status: row.status,
+        timestamp: row.date,
+        comment: row.data?.comment || row.data?.reason
+      }));
+
+      const buyerName = [orderDetails.first_name, orderDetails.last_name].filter(Boolean).join(' ');
+
+      const dto = {
+        order_id: orderDetails.order_id,
+        total_sum: String(orderDetails.total ?? '0.00'),
+        status: currentStatus,
+        created_at: orderDetails.created_date,
+        seller_name: '',
+        pickup_address: orderDetails.address || '',
+        products: (orderDetails.products || []).map((product) => ({
+          product_id: product.product_id,
+          name: product.name,
+          photo: firstPhoto(product.photos),
+          quantity: product.ordered_count,
+          price: String(product.price)
+        })),
+        buyer_name: buyerName,
+        buyer_phone: '',
+        status_history: statusHistory
+      };
+
       return res.status(200).json({
         success: true,
-        data: orderDetails
+        data: dto
       });
 
     } catch (error) {

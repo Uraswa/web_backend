@@ -1,7 +1,7 @@
 {
   "info": {
-    "name": "OPP API - ЛК Владельца ПВЗ",
-    "description": "API для управления ПВЗ (пунктом выдачи заказов)",
+    "name": "OPP API - Owner Portal",
+    "description": "Owner portal endpoints under /api/opp/* plus the owner OPP info endpoint.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -23,6 +23,16 @@
     {
       "key": "orderId",
       "value": "123",
+      "type": "string"
+    },
+    {
+      "key": "logisticsOrderId",
+      "value": "7",
+      "type": "string"
+    },
+    {
+      "key": "productId",
+      "value": "11",
       "type": "string"
     }
   ],
@@ -46,8 +56,13 @@
             },
             "url": {
               "raw": "{{baseUrl}}/api/login",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "login"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "login"
+              ]
             }
           },
           "response": []
@@ -55,10 +70,39 @@
       ]
     },
     {
-      "name": "OPP - Информация",
+      "name": "User OPP",
       "item": [
         {
-          "name": "Получить статистику ПВЗ",
+          "name": "Get User OPP",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/user/opp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "user",
+                "opp"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "OPP - Statistics",
+      "item": [
+        {
+          "name": "Get OPP Statistics",
           "request": {
             "method": "GET",
             "header": [
@@ -69,8 +113,15 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/api/opp/{{oppId}}/statistics",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "opp", "{{oppId}}", "statistics"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "opp",
+                "{{oppId}}",
+                "statistics"
+              ]
             }
           },
           "response": []
@@ -78,10 +129,10 @@
       ]
     },
     {
-      "name": "OPP - Заказы",
+      "name": "OPP - Orders",
       "item": [
         {
-          "name": "Получить список заказов",
+          "name": "Get Orders (All)",
           "request": {
             "method": "GET",
             "header": [
@@ -92,14 +143,21 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/api/opp/{{oppId}}/orders",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "opp", "{{oppId}}", "orders"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "opp",
+                "{{oppId}}",
+                "orders"
+              ]
             }
           },
           "response": []
         },
         {
-          "name": "Получить список заказов (с фильтром)",
+          "name": "Get Orders (Waiting)",
           "request": {
             "method": "GET",
             "header": [
@@ -110,8 +168,15 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/api/opp/{{oppId}}/orders?status=waiting",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "opp", "{{oppId}}", "orders"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "opp",
+                "{{oppId}}",
+                "orders"
+              ],
               "query": [
                 {
                   "key": "status",
@@ -123,7 +188,7 @@
           "response": []
         },
         {
-          "name": "Получить детали заказа",
+          "name": "Get Order Details",
           "request": {
             "method": "GET",
             "header": [
@@ -134,8 +199,16 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/api/opp/{{oppId}}/orders/{{orderId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "opp", "{{oppId}}", "orders", "{{orderId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "opp",
+                "{{oppId}}",
+                "orders",
+                "{{orderId}}"
+              ]
             }
           },
           "response": []
@@ -143,10 +216,10 @@
       ]
     },
     {
-      "name": "OPP - Логистика",
+      "name": "OPP - Logistics Orders",
       "item": [
         {
-          "name": "Получить логистические заказы (все)",
+          "name": "Get Logistics Orders (All)",
           "request": {
             "method": "GET",
             "header": [
@@ -157,14 +230,21 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/api/opp/{{oppId}}/logistics-orders",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "opp", "{{oppId}}", "logistics-orders"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "opp",
+                "{{oppId}}",
+                "logistics-orders"
+              ]
             }
           },
           "response": []
         },
         {
-          "name": "Получить входящие логистические заказы",
+          "name": "Get Logistics Orders (Incoming)",
           "request": {
             "method": "GET",
             "header": [
@@ -175,8 +255,15 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/api/opp/{{oppId}}/logistics-orders?direction=incoming",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "opp", "{{oppId}}", "logistics-orders"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "opp",
+                "{{oppId}}",
+                "logistics-orders"
+              ],
               "query": [
                 {
                   "key": "direction",
@@ -188,7 +275,7 @@
           "response": []
         },
         {
-          "name": "Получить исходящие логистические заказы",
+          "name": "Get Logistics Orders (Outgoing)",
           "request": {
             "method": "GET",
             "header": [
@@ -199,8 +286,15 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/api/opp/{{oppId}}/logistics-orders?direction=outgoing",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "opp", "{{oppId}}", "logistics-orders"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "opp",
+                "{{oppId}}",
+                "logistics-orders"
+              ],
               "query": [
                 {
                   "key": "direction",
@@ -214,10 +308,10 @@
       ]
     },
     {
-      "name": "OPP - Операции",
+      "name": "OPP - Operations",
       "item": [
         {
-          "name": "Принять товар от продавца",
+          "name": "Receive From Seller",
           "request": {
             "method": "POST",
             "header": [
@@ -232,18 +326,25 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"order_id\": 123,\n  \"product_id\": 100,\n  \"count\": 5\n}"
+              "raw": "{\n  \"order_id\": {{orderId}},\n  \"product_id\": {{productId}},\n  \"count\": 2\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/opp/{{oppId}}/receive-from-seller",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "opp", "{{oppId}}", "receive-from-seller"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "opp",
+                "{{oppId}}",
+                "receive-from-seller"
+              ]
             }
           },
           "response": []
         },
         {
-          "name": "Передать товар логисту",
+          "name": "Give To Logistics",
           "request": {
             "method": "POST",
             "header": [
@@ -258,18 +359,25 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"order_id\": 123,\n  \"logistics_order_id\": 5,\n  \"product_id\": 100,\n  \"count\": 2\n}"
+              "raw": "{\n  \"order_id\": {{orderId}},\n  \"logistics_order_id\": {{logisticsOrderId}},\n  \"product_id\": {{productId}},\n  \"count\": 2\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/opp/{{oppId}}/give-to-logistics",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "opp", "{{oppId}}", "give-to-logistics"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "opp",
+                "{{oppId}}",
+                "give-to-logistics"
+              ]
             }
           },
           "response": []
         },
         {
-          "name": "Принять товар от логиста",
+          "name": "Receive From Logistics",
           "request": {
             "method": "POST",
             "header": [
@@ -284,18 +392,25 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"logistics_order_id\": 5\n}"
+              "raw": "{\n  \"logistics_order_id\": {{logisticsOrderId}}\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/opp/{{oppId}}/receive-from-logistics",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "opp", "{{oppId}}", "receive-from-logistics"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "opp",
+                "{{oppId}}",
+                "receive-from-logistics"
+              ]
             }
           },
           "response": []
         },
         {
-          "name": "Выдать заказ клиенту (без отказов)",
+          "name": "Deliver (No Rejections)",
           "request": {
             "method": "POST",
             "header": [
@@ -310,18 +425,25 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"order_id\": 123,\n  \"rejected_products\": []\n}"
+              "raw": "{\n  \"order_id\": {{orderId}},\n  \"rejected_products\": []\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/opp/{{oppId}}/deliver",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "opp", "{{oppId}}", "deliver"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "opp",
+                "{{oppId}}",
+                "deliver"
+              ]
             }
           },
           "response": []
         },
         {
-          "name": "Выдать заказ клиенту (с отказом от товаров)",
+          "name": "Deliver (With Rejections)",
           "request": {
             "method": "POST",
             "header": [
@@ -336,12 +458,19 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"order_id\": 123,\n  \"rejected_products\": [\n    {\"product_id\": 100, \"count\": 1}\n  ]\n}"
+              "raw": "{\n  \"order_id\": {{orderId}},\n  \"rejected_products\": [\n    {\"product_id\": {{productId}}, \"count\": 1}\n  ]\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/opp/{{oppId}}/deliver",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "opp", "{{oppId}}", "deliver"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "opp",
+                "{{oppId}}",
+                "deliver"
+              ]
             }
           },
           "response": []
