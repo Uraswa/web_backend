@@ -31,6 +31,11 @@ class OPPModel extends BasicPPOModel {
     return '';
   }
 
+  _mapOppAddress(oppId, addressMap) {
+    const address = addressMap.get(oppId);
+    return address || `ПВЗ #${oppId}`;
+  }
+
   /**
    * Получить заказы для конкретного ПВЗ
    * Использует готовый метод BasicOrderModel.findByOppId()
@@ -177,8 +182,8 @@ class OPPModel extends BasicPPOModel {
    * @param {string} direction - 'incoming' | 'outgoing' | 'all'
    * @returns {Array} - массив логистических заказов
    */
-  getLogisticsOrdersByOPPId(oppId, direction = 'all') {
-    const result = [];
+  async getLogisticsOrdersByOPPId(oppId, direction = 'all') {
+    const matching = [];
 
     // Напрямую читаем из _logisticsOrders сервиса
     for (const [logisticsOrderId, order] of Object.entries(OuterLogisticsService._logisticsOrders)) {
@@ -193,19 +198,79 @@ class OPPModel extends BasicPPOModel {
       }
 
       if (shouldInclude) {
-        result.push({
-          logistics_order_id: parseInt(logisticsOrderId),
-          source_opp_id: order.sourceOppId,
-          target_opp_id: order.targetOppId,
-          created_date: order.createdDate,
-          products_count: order.products.length,
-          total_items: order.products.reduce((sum, p) => sum + p.count, 0),
-          products: order.products
+        matching.push({
+          logisticsOrderId: parseInt(logisticsOrderId),
+          sourceOppId: order.sourceOppId,
+          targetOppId: order.targetOppId,
+          createdDate: order.createdDate,
+          products: order.products || []
         });
       }
     }
 
-    return result;
+    if (matching.length === 0) {
+      return [];
+    }
+
+    const oppIds = Array.from(new Set(
+      matching.flatMap((o) => [o.sourceOppId, o.targetOppId]).filter((id) => Number.isInteger(id))
+    ));
+
+    const productIds = Array.from(new Set(
+      matching.flatMap((o) => o.products.map((p) => p.productId)).filter((id) => Number.isInteger(id))
+    ));
+
+    const addressMap = new Map();
+    if (oppIds.length > 0) {
+      const oppResult = await Database.query(
+        'SELECT opp_id, address FROM opp WHERE opp_id = ANY($1::int[])',
+        [oppIds]
+      );
+      for (const row of oppResult.rows) {
+        addressMap.set(row.opp_id, row.address);
+      }
+    }
+
+    const productMap = new Map();
+    if (productIds.length > 0) {
+      const productsResult = await Database.query(
+        'SELECT product_id, name, photos FROM products WHERE product_id = ANY($1::int[])',
+        [productIds]
+      );
+      for (const row of productsResult.rows) {
+        productMap.set(row.product_id, {
+          name: row.name,
+          photo: this._firstPhoto(row.photos)
+        });
+      }
+    }
+
+    return matching.map((order) => {
+      const totalQuantity = order.products.reduce((sum, p) => sum + (Number(p.count) || 0), 0);
+      const directionRel =
+        order.sourceOppId === oppId ? 'outgoing' :
+          order.targetOppId === oppId ? 'incoming' : 'outgoing';
+
+      return {
+        logistics_order_id: order.logisticsOrderId,
+        direction: directionRel,
+        products: order.products.map((p) => {
+          const mapped = productMap.get(p.productId);
+          return {
+            product_id: p.productId,
+            name: mapped?.name || p.productName || `Товар #${p.productId}`,
+            photo: mapped?.photo || '',
+            quantity: Number(p.count) || 0,
+            price: String(p.price ?? '0')
+          };
+        }),
+        total_quantity: totalQuantity,
+        status: 'in_transit',
+        created_at: order.createdDate,
+        from_opp: this._mapOppAddress(order.sourceOppId, addressMap),
+        to_opp: this._mapOppAddress(order.targetOppId, addressMap)
+      };
+    });
   }
 }
 
