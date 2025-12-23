@@ -6,6 +6,7 @@ import authMiddleware from "../../Core/Middleware/authMiddleware.js";
 import CategoryController from "./Controller/CategoryController.js";
 import CarouselController from './Controller/CarouselController.js';
 import OppController from './Controller/OppController.js';
+import NewsletterController from './Controller/NewsletterController.js';
 
 export default (router) => {
 
@@ -44,6 +45,10 @@ export default (router) => {
     router.get('/api/categories', CategoryController.getAllCategories);
     router.get('/api/categories/getFilters', CategoryController.getFilters);
     router.get('/api/characteristics/names', CategoryController.getCharacteristicNames);
+
+// Подписка на новости
+    router.post('/api/newsletter/subscribe', NewsletterController.subscribe);
+    router.post('/api/newsletter/unsubscribe', NewsletterController.unsubscribe);
 
 // Рекламная карусель
     router.get('/carousel/slides', CarouselController.getSlides);
