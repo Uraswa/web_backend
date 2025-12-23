@@ -8,11 +8,14 @@ class CartController {
         try {
             const user = req.user;
 
-            const cart = await CartService.getCartWithDetails(user.user_id);
+            const {cart, changes} = await CartService.ValidateProductCounts(user.user_id);
 
             return res.status(200).json({
                 success: true,
-                data: cart
+                data: {
+                    ...cart,
+                    changes: changes.length > 0 ? changes : undefined
+                }
             });
         } catch (error) {
             console.error(error);
@@ -27,7 +30,7 @@ class CartController {
         try {
             const user = req.user;
             const {productId} = req.params;
-            const {quantity = 1} = req.body;
+            const {quantity = 1, add = false} = req.body;
 
             const product = await ProductModel.findById(productId);
             if (!product) {
@@ -37,10 +40,16 @@ class CartController {
                 });
             }
 
-            const cart = await CartService.updateCartItem(user.user_id, productId, parseInt(quantity));
+            await CartService.updateCartItem(user.user_id, productId, parseInt(quantity), add);
+
+            const {cart, changes} = await CartService.ValidateProductCounts(user.user_id);
+
             return res.status(200).json({
                 success: true,
-                data: cart
+                data: {
+                    ...cart,
+                    changes: changes.length > 0 ? changes : undefined
+                }
             });
 
 

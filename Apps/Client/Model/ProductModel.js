@@ -56,7 +56,21 @@ class ProductModel extends BasicProductModel {
         if (filters.char_filters && filters.char_filters.length > 0) {
             // Проверяем, что характеристики - JSONB или приводим к JSONB
             for (let char_filter of filters.char_filters) {
-                if (char_filter.filter && char_filter.value !== undefined) {
+                if (!char_filter.filter) continue;
+
+                const multiValues = Array.isArray(char_filter.values)
+                    ? char_filter.values
+                    : (Array.isArray(char_filter.value) ? char_filter.value : null);
+
+                if (multiValues && multiValues.length > 0) {
+                    query += ` AND p.characteristics ? $${paramCount}`;
+                    values.push(char_filter.filter);
+                    paramCount++;
+
+                    query += ` AND jsonb_extract_path_text(p.characteristics, $${paramCount}) = ANY($${paramCount + 1})`;
+                    values.push(char_filter.filter, multiValues);
+                    paramCount += 2;
+                } else if (char_filter.value !== undefined) {
                     // Используем jsonb_exists и jsonb_extract_path_text для безопасной фильтрации
                     query += ` AND p.characteristics ? $${paramCount}`;
                     values.push(char_filter.filter);
@@ -67,20 +81,32 @@ class ProductModel extends BasicProductModel {
                     paramCount += 2;
                 }
                 // TODO CHAR_FILTER MIN, MAX VALIDATION: лучше бы это валидировать, а то если досить неправильными фильтрами, то можно положить БД
-                else if (char_filter.filter && (char_filter.min !== undefined || char_filter.max !== undefined)){
+                else if (char_filter.min !== undefined || char_filter.max !== undefined){
                     query += ` AND p.characteristics ? $${paramCount}`;
                     values.push(char_filter.filter);
                     paramCount++;
 
-                    if (char_filter.min !== undefined && !!Number.parseFloat(char_filter.min)){
-                        query += ` AND jsonb_extract_path_text(p.characteristics, $${paramCount}) >= $${paramCount + 1}`;
-                        values.push(char_filter.filter, char_filter.min);
+                    if (char_filter.min !== undefined && Number.isFinite(Number.parseFloat(char_filter.min))){
+                        const minNum = Number.parseFloat(char_filter.min);
+                        query += ` AND (
+                            COALESCE(
+                                NULLIF(jsonb_extract_path_text(p.characteristics, $${paramCount}), '')::numeric,
+                                0
+                            ) >= $${paramCount + 1}
+                        )`;
+                        values.push(char_filter.filter, minNum);
                         paramCount += 2;
                     }
 
-                    if (char_filter.max !== undefined && !!Number.parseFloat(char_filter.max)){
-                        query += ` AND jsonb_extract_path_text(p.characteristics, $${paramCount}) <= $${paramCount + 1}`;
-                        values.push(char_filter.filter, char_filter.max);
+                    if (char_filter.max !== undefined && Number.isFinite(Number.parseFloat(char_filter.max))){
+                        const maxNum = Number.parseFloat(char_filter.max);
+                        query += ` AND (
+                            COALESCE(
+                                NULLIF(jsonb_extract_path_text(p.characteristics, $${paramCount}), '')::numeric,
+                                999999999
+                            ) <= $${paramCount + 1}
+                        )`;
+                        values.push(char_filter.filter, maxNum);
                         paramCount += 2;
                     }
                 }

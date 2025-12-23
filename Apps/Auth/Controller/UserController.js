@@ -396,6 +396,79 @@ class UserController {
         }
     }
 
+    async createProfile(req, res) {
+        try {
+            const user = req.user;
+            if (!user) {
+                return res.status(401).json({
+                    success: false,
+                    error: 'Пользователь не авторизован'
+                });
+            }
+
+            const {first_name, last_name} = req.body;
+
+            if (!first_name || !last_name) {
+                return res.status(200).json({
+                    success: false,
+                    error: 'Имя и фамилия обязательны'
+                });
+            }
+
+            if (first_name.length > 100) {
+                return res.status(200).json({
+                    success: false,
+                    error: 'Имя не должно превышать 100 символов',
+                    error_field: 'first_name'
+                });
+            }
+
+            if (last_name.length > 100) {
+                return res.status(200).json({
+                    success: false,
+                    error: 'Фамилия не должна превышать 100 символов',
+                    error_field: 'last_name'
+                });
+            }
+
+            const existingProfile = await UserModel.checkProfileExists(user.user_id);
+            if (existingProfile) {
+                return res.status(200).json({
+                    success: false,
+                    error: 'У пользователя уже есть профиль'
+                });
+            }
+
+            const profile = await UserModel.createProfile(user.user_id, first_name, last_name);
+            if (!profile) {
+                return res.status(200).json({
+                    success: false,
+                    error: 'Unknown_error'
+                });
+            }
+
+            return res.status(200).json({
+                success: true,
+                data: {
+                    profile
+                }
+            });
+
+        } catch (error) {
+            console.error(error);
+            if (error.code === '23505') {
+                return res.status(200).json({
+                    success: false,
+                    error: 'У пользователя уже есть профиль'
+                });
+            }
+            res.status(500).json({
+                success: false,
+                error: 'Unknown error'
+            });
+        }
+    }
+
 }
 
 export default new UserController();

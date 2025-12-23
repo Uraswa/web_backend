@@ -1,6 +1,7 @@
 import dotenv from "dotenv"
 import authRoutes from "./Apps/Auth/router.js";
 import clientRoutes from "./Apps/Client/router.js";
+import adminRoutes from "./Apps/Admin/router.js";
 import oppRoutes from "./Apps/OPP/router.js";
 import shopRouter from "./Apps/Shop/router.js"
 
@@ -30,13 +31,14 @@ app.use(express.json())
 app.use(cookieParser());
 app.options(/.*/, cors(corsOptions));
 
-// console.log(tokenService.generateTokens({user_id: 34395}, '999h', '9999h'))
+// console.log(tokenService.generateTokens({user_id: 34401}, '999h', '9999h'))
 
 const router = express.Router()
 app.use(router);
 
 authRoutes(router)
 clientRoutes(router)
+adminRoutes(router)
 oppRoutes(router)
 shopRouter(router)
 
