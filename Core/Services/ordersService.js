@@ -148,7 +148,9 @@ class OrdersService {
                     }
 
                     // Определяем, это стартовый или целевой ПВЗ
-                    if (data.is_start_opp) {
+                    if (data.is_target_opp && data.is_start_opp) {
+                        distribution.at_target_opp += count;
+                    } else if (data.is_start_opp) {
                         distribution.at_start_opp += count;
                     } else if (data.is_target_opp) {
                         distribution.at_target_opp += count;
@@ -823,30 +825,31 @@ class OrdersService {
                 );
             }
 
-            // Добавляем статус arrived_in_opp
-            await client.query(
-                `INSERT INTO order_product_statuses (order_id, product_id, order_product_status, count, date, data)
-                 VALUES ($1, $2, 'arrived_in_opp', $3, NOW(), $4)`,
-                [
-                    orderId,
-                    productId,
-                    count,
-                    JSON.stringify(new ArrivedInOppFromSellerDto(oppId))
-                ]
-            );
 
             if (oppId == orderCheck.rows[0].target_opp_id) {
                 // Добавляем статус arrived_in_opp
-                    await client.query(
-                        `INSERT INTO order_product_statuses (order_id, product_id, order_product_status, count, date, data)
-                         VALUES ($1, $2, 'arrived_in_opp', $3, NOW(), $4)`,
-                        [
-                            orderId,
-                            productId,
-                            count,
-                            JSON.stringify({opp_id: oppId, is_target_opp: true})
-                        ]
-                    );
+                await client.query(
+                    `INSERT INTO order_product_statuses (order_id, product_id, order_product_status, count, date, data)
+                     VALUES ($1, $2, 'arrived_in_opp', $3, NOW(), $4)`,
+                    [
+                        orderId,
+                        productId,
+                        count,
+                        JSON.stringify({opp_id: oppId, is_target_opp: true, is_start_opp: true})
+                    ]
+                );
+            } else {
+                // Добавляем статус arrived_in_opp
+                await client.query(
+                    `INSERT INTO order_product_statuses (order_id, product_id, order_product_status, count, date, data)
+                     VALUES ($1, $2, 'arrived_in_opp', $3, NOW(), $4)`,
+                    [
+                        orderId,
+                        productId,
+                        count,
+                        JSON.stringify(new ArrivedInOppFromSellerDto(oppId))
+                    ]
+                );
             }
 
             await client.query('COMMIT');
@@ -1285,7 +1288,7 @@ class OrdersService {
                  FROM order_product_statuses
                  WHERE order_id = $1
                    AND order_product_status = 'arrived_in_opp'
-                   AND data->>'is_target_opp' = 'true'
+                   AND data ->> 'is_target_opp' = 'true'
                  GROUP BY product_id`,
                 [orderId]
             );
