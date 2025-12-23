@@ -67,6 +67,12 @@ class ProductController {
             res.json({ success: true, message: 'Товар удалён' });
         } catch (err) {
             console.error(err);
+            if (err?.code === '23503') {
+                return res.status(409).json({
+                    success: false,
+                    error: 'Нельзя удалить товар: он используется в заказах'
+                });
+            }
             res.status(500).json({ success: false, error: 'Ошибка удаления товара' });
         }
     }

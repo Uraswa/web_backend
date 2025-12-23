@@ -74,28 +74,28 @@ class ProductModel extends BasicProductModel {
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             RETURNING *
         `;
-        const result = await Database.query(query, [
-            categoryId,
-            shopId,
-            name,
-            description,
-            photos,
-            price,
-            JSON.stringify(characteristics),
-            variantGroupId
-        ]);
+        try {
+            const result = await Database.query(query, [
+                categoryId,
+                shopId,
+                name,
+                description,
+                photos,
+                price,
+                JSON.stringify(characteristics),
+                variantGroupId
+            ]);
 
-        // Если это новая группа вариантов и variantGroupId не задан, используем ID первого товара как variant_group_id
-        if (!variantGroupId) {
-            const newProduct = result.rows[0];
-            await Database.query(
-                `UPDATE ${this.tableName} SET variant_group_id = $1 WHERE product_id = $1`,
-                [newProduct.product_id]
-            );
-            newProduct.variant_group_id = newProduct.product_id;
+            // ВАЖНО: products.variant_group_id — FK на product_variants.variant_group_id.
+            // Если variantGroupId не передан, оставляем NULL (обычный товар без группы вариантов).
+            return result.rows[0];
+        } catch (error) {
+            // FK violation (например, если передали несуществующий variantGroupId)
+            if (error?.code === '23503') {
+                throw new Error('Некорректная группа вариантов (variantGroupId)');
+            }
+            throw error;
         }
-
-        return result.rows[0];
     }
 
 // Обновление товара с проверкой уникальности комбинации в группе вариантов

@@ -1,4 +1,5 @@
 import ProductModel from "../Model/ProductModel.js";
+import OrderModel from "../Model/OrderModel.js";
 import ShopModel from "../Model/ShopModel.js";
 
 const getUserId = (req) => {
@@ -101,3 +102,28 @@ export const requireProductOwnerFromParams = (paramName = "id") => {
   };
 };
 
+export const requireSellerOrderOwnerFromParams = (paramName = "orderId") => {
+  return async (req, res, next) => {
+    try {
+      const userId = getUserId(req);
+      if (!userId) {
+        return res.status(401).json({ success: false, error: "unauthorized" });
+      }
+
+      const orderId = Number.parseInt(req.params?.[paramName], 10);
+      if (!Number.isFinite(orderId)) {
+        return res.status(400).json({ success: false, error: "invalid_order_id" });
+      }
+
+      const hasAccess = await OrderModel.hasOrderForOwner(orderId, userId);
+      if (!hasAccess) {
+        return res.status(404).json({ success: false, error: "order_not_found" });
+      }
+
+      return next();
+    } catch (error) {
+      console.error(error);
+      return res.status(500).json({ success: false, error: "internal_error" });
+    }
+  };
+};

@@ -1,6 +1,7 @@
 import dotenv from "dotenv"
 import authRoutes from "./Apps/Auth/router.js";
 import clientRoutes from "./Apps/Client/router.js";
+import oppRoutes from "./Apps/OPP/router.js";
 import shopRouter from "./Apps/Shop/router.js"
 
 dotenv.config();
@@ -36,6 +37,7 @@ app.use(router);
 
 authRoutes(router)
 clientRoutes(router)
+oppRoutes(router)
 shopRouter(router)
 
 let server = app.listen(3000, () => {

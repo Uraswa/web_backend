@@ -4,6 +4,7 @@ import OrderController from './Controller/OrderController.js';
 import authMiddleware from "../../Core/Middleware/authMiddleware.js";
 import {
     requireProductOwnerFromParams,
+    requireSellerOrderOwnerFromParams,
     requireShopOwnerFromBody,
     requireShopOwnerFromParams
 } from "./Middleware/ownershipMiddleware.js";
@@ -30,6 +31,9 @@ export default (router) => {
 
     // Список заказов продавца с информацией о ПВЗ
     router.get('/api/orders/shop/:shopId', authMiddleware, requireShopOwnerFromParams('shopId'), OrderController.listByShop);
+
+    // Детали заказа продавца (только его товары в заказе)
+    router.get('/api/seller/orders/:orderId', authMiddleware, requireSellerOrderOwnerFromParams('orderId'), OrderController.getSellerOrderDetails);
 
 // Магазин
 
