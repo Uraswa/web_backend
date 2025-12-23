@@ -15,6 +15,9 @@ export default (router) => {
     // Список товаров с фильтром по названию
     router.get('/api/products', authMiddleware, ProductController.getListProductByFilter);
 
+    // Получить товар по ID (seller-версия без конфликта с Client API)
+    router.get('/api/seller/products/:id', authMiddleware, requireProductOwnerFromParams('id'), ProductController.get);
+
     // Получить товар по ID (для редактирования)
     router.get('/api/products/:id', authMiddleware, requireProductOwnerFromParams('id'), ProductController.get);
 
